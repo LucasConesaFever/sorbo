@@ -1,0 +1,86 @@
+# sorbo configuration. Saved changes apply immediately.
+# Errors show in a red bar at the top of the screen and in ~/Library/Logs/sorbo/wm.log
+# (lines starting with "config:"). Check without saving: sorbo --check-config
+#
+# This file is the whole truth: a binding that isn't here doesn't exist. Without the file,
+# sorbo uses a copy of this one that is built in.
+
+[gaps]
+outer = 5   # points between windows and the screen edge
+inner = 4   # points between windows
+
+[bindings]
+# "<modifiers>-<key>" = "<action>"
+#
+# Modifiers: cmd, alt (Option), ctrl, shift, in any order; at least one of cmd, alt, ctrl.
+# Keys: a-z, 0-9, enter, tab, space, escape, backspace, delete, left, right, up, down,
+#   home, end, pageup, pagedown, f1-f12, and punctuation by name: plus, minus, equal,
+#   comma, period, slash, backslash, semicolon, quote, backtick, leftbracket, rightbracket
+#   (punctuation is looked up on the current keyboard layout).
+# Actions:
+#   workspace <n|next|prev>       go to workspace n (any number from 1), or cycle
+#   move-to-workspace <n>         move the focused window there and follow it
+#   focus <left|right|up|down>    focus the neighbouring window
+#   swap <left|right|up|down>     swap the focused window with its neighbour
+#   resize <grow|shrink>          resize the focused window's split
+#   resize-mode                   resize mode: arrows or h j k l move the dividers,
+#                                 Escape or Return leaves
+#   toggle-split                  flip the split between horizontal and vertical
+#   toggle-floating               float or tile the focused window
+#   close                         close the focused window
+#   new-window <app>              new window of an app: a bundle id (com.apple.Terminal),
+#                                 an app name as in /Applications (kitty, Google Chrome),
+#                                 or browser (the default web browser)
+
+ctrl-alt-1 = "workspace 1"
+ctrl-alt-2 = "workspace 2"
+ctrl-alt-3 = "workspace 3"
+ctrl-alt-4 = "workspace 4"
+ctrl-alt-5 = "workspace 5"
+ctrl-alt-6 = "workspace 6"
+ctrl-alt-7 = "workspace 7"
+ctrl-alt-8 = "workspace 8"
+ctrl-alt-9 = "workspace 9"
+ctrl-alt-0 = "workspace 10"
+
+ctrl-alt-shift-1 = "move-to-workspace 1"
+ctrl-alt-shift-2 = "move-to-workspace 2"
+ctrl-alt-shift-3 = "move-to-workspace 3"
+ctrl-alt-shift-4 = "move-to-workspace 4"
+ctrl-alt-shift-5 = "move-to-workspace 5"
+ctrl-alt-shift-6 = "move-to-workspace 6"
+ctrl-alt-shift-7 = "move-to-workspace 7"
+ctrl-alt-shift-8 = "move-to-workspace 8"
+ctrl-alt-shift-9 = "move-to-workspace 9"
+ctrl-alt-shift-0 = "move-to-workspace 10"
+
+ctrl-alt-tab = "workspace next"
+ctrl-alt-shift-tab = "workspace prev"
+
+ctrl-alt-left = "focus left"
+ctrl-alt-right = "focus right"
+ctrl-alt-up = "focus up"
+ctrl-alt-down = "focus down"
+ctrl-alt-shift-left = "swap left"
+ctrl-alt-shift-right = "swap right"
+ctrl-alt-shift-up = "swap up"
+ctrl-alt-shift-down = "swap down"
+
+ctrl-alt-plus = "resize grow"
+ctrl-alt-minus = "resize shrink"
+# Resize mode: then arrows or h j k l move the dividers; Escape or Return to leave.
+ctrl-alt-r = "resize-mode"
+ctrl-alt-j = "toggle-split"
+ctrl-alt-v = "toggle-floating"
+ctrl-alt-q = "close"
+
+ctrl-alt-enter = "new-window com.apple.Terminal"
+ctrl-alt-b = "new-window browser"
+ctrl-alt-e = "new-window com.apple.finder"
+
+# Window rules: windows of an app start floating (or tiled). "app" is an app name as in
+# /Applications or a bundle id, any case. A saved rule applies to the app's next window.
+#
+# [[rules]]
+# app = "Calculator"
+# floating = true

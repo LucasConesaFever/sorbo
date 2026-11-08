@@ -1,0 +1,13 @@
+[workspace]
+members = ["crates/wm-core", "crates/wm-macos", "crates/sorbo"]
+resolver = "2"
+
+# Shared by every crate (`<key>.workspace = true`).
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.89"
+license = "MIT"
+repository = "https://github.com/LucasConesaFever/sorbo"
+# Built from source with ./wm.sh; nothing here goes to crates.io.
+publish = false

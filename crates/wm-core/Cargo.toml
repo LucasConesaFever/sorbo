@@ -1,0 +1,14 @@
+[package]
+name = "wm-core"
+description = "Pure window-manager logic of sorbo, with no macOS dependencies"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+# Only the parser: `DeTable::parse` gives every key and value with its position in the
+# file, which is all the config module needs (no serde).
+toml = { version = "1.2.1", default-features = false, features = ["std", "parse"] }

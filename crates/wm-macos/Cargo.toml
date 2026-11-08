@@ -1,0 +1,21 @@
+[package]
+name = "wm-macos"
+description = "The macOS platform of sorbo: Accessibility, CoreGraphics, AppKit"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+wm-core = { path = "../wm-core" }
+
+# macOS-only so `cargo test` keeps working on Linux (AGENTS.md).
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6.5"
+objc2-foundation = "0.3.2"
+objc2-app-kit = "0.3.2"
+objc2-core-foundation = "0.3.2"
+objc2-core-graphics = "0.3.2"
+objc2-application-services = "0.3.2"

@@ -1,0 +1,6 @@
+/target
+.superpowers/
+# Design notes, plans and acceptance results stay local.
+docs/superpowers/
+# Personal working notes for Claude Code.
+CLAUDE.local.md

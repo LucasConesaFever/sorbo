@@ -1,0 +1,58 @@
+# The same checks as before a commit (CONTRIBUTING.md), plus wm-core on Linux (AGENTS.md:
+# wm-core must build and test on Linux). Only GitHub's own checkout action is used, pinned
+# to a commit; Rust comes from rustup, which the runners already have.
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+# Nothing by default; each job asks for what it needs.
+permissions: {}
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  macos:
+    runs-on: macos-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Rust
+        run: |
+          rustup toolchain install stable --profile minimal --component clippy,rustfmt
+          rustup default stable
+      - name: Format
+        run: cargo fmt --all -- --check
+      - name: Clippy
+        run: cargo clippy --all-targets -- -D warnings
+      - name: Tests
+        run: cargo test
+      - name: wm.sh migration tests
+        run: bash tests/migration.sh
+      - name: wm.sh certificate tests
+        run: bash tests/certificate.sh
+
+  linux-core:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Rust
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+      - name: wm-core tests
+        run: cargo test -p wm-core
