@@ -35,6 +35,8 @@ pub struct Wm {
     focused_monitor: Option<MonitorId>,
     /// What the pointer was over at the last `PointerMoved`.
     pointer_over: Option<PointerTarget>,
+    /// The monitor the pointer was last inside (FOC-10).
+    pointer_monitor: Option<MonitorId>,
     /// Where we last warped the pointer; the echo of that warp is ignored (FOC-4).
     pending_warp: Option<Point>,
     /// The last placement sent (or reported) for each managed window.

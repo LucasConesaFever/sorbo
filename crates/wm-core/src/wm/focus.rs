@@ -47,16 +47,21 @@ fn nearest_in_direction<T>(
 }
 
 impl Wm {
-    /// FOC-1, FOC-2, FOC-4, FOC-5. Only crossing into a *different*, managed, non-popup window
-    /// changes focus. Everything else (the same window, a popup, a menu, the desktop, an
-    /// unknown window, the echo of our own warp) produces no command at all.
+    /// FOC-1, FOC-2, FOC-4, FOC-5, FOC-10. Only crossing into a *different*, managed,
+    /// non-popup window changes focus, or entering a monitor whose workspace is empty.
+    /// Everything else (the same window, a popup, a menu, the desktop, an unknown window, the
+    /// echo of our own warp) produces no command at all.
     pub(super) fn on_pointer_moved(&mut self, position: Point, target: PointerTarget) {
+        let entered = self.pointer_entered_monitor(position);
         // FOC-4: the first event at the point we just warped to is that warp's echo.
         if let Some(warp) = self.pending_warp.take()
             && position.near(warp)
         {
             self.pointer_over = Some(target);
             return;
+        }
+        if let Some(monitor) = entered {
+            self.focus_if_empty(monitor);
         }
         let target = self.floating_over_tile(position, target);
         // FOC-2: no crossing, nothing to do.
@@ -78,6 +83,34 @@ impl Wm {
             return;
         }
         self.set_focus(Some(id), true);
+    }
+
+    /// The monitor the pointer just moved into, if it changed. Outside every monitor's usable
+    /// area (a menu bar) the last one is kept, so a trip to the menu bar isn't a crossing.
+    fn pointer_entered_monitor(&mut self, position: Point) -> Option<MonitorId> {
+        let id = self.monitor_at(position)?.id.clone();
+        if self.pointer_monitor.as_ref() == Some(&id) {
+            return None;
+        }
+        self.pointer_monitor = Some(id.clone());
+        Some(id)
+    }
+
+    /// FOC-10: entering a monitor whose visible workspace is empty focuses that monitor, with
+    /// no window focused, so a new window opens there. A monitor with windows waits for the
+    /// pointer to cross into one (FOC-1).
+    fn focus_if_empty(&mut self, monitor: MonitorId) {
+        if self.focused_monitor.as_ref() == Some(&monitor) {
+            return;
+        }
+        let empty = self
+            .visible_workspace(&monitor)
+            .and_then(|n| self.workspaces.get(&n))
+            .is_some_and(|ws| ws.is_empty());
+        if empty {
+            self.set_focus(None, false);
+            self.focused_monitor = Some(monitor);
+        }
     }
 
     /// FOC-9: a floating window's area belongs to it, as if it were above the tiles. macOS
@@ -649,6 +682,69 @@ mod tests {
         assert_eq!(wm.focused_monitor(), Some(&"ext".into()));
         assert_eq!(wm.focused_window(), None);
         assert_eq!(nums(&wm), vec![1, 2]);
+    }
+
+    /// Window 1 on "main" is focused; "ext" shows empty workspace 2.
+    fn empty_ext() -> Wm {
+        let mut wm = started(vec![main_monitor(), ext_monitor()], vec![normal(1)]);
+        act(&mut wm, Action::GoToWorkspace(ws(1)));
+        moved(&mut wm, 500., 400., win(1));
+        wm
+    }
+
+    #[test]
+    fn foc_10_pointer_onto_an_empty_monitor_focuses_it() {
+        let mut wm = empty_ext();
+        assert_eq!(moved(&mut wm, 1500., 400., PointerTarget::Other), vec![]);
+        assert_eq!(wm.focused_monitor(), Some(&"ext".into()));
+        assert_eq!(wm.focused_window(), None);
+        assert_eq!(nums(&wm), vec![1, 2]);
+    }
+
+    #[test]
+    fn foc_10_from_the_desktop_of_one_monitor_to_an_empty_one() {
+        let mut wm = empty_ext();
+        moved(&mut wm, 2., 2., PointerTarget::Other);
+        moved(&mut wm, 1500., 400., PointerTarget::Other);
+        assert_eq!(wm.focused_monitor(), Some(&"ext".into()));
+    }
+
+    #[test]
+    fn foc_10_a_new_window_opens_on_the_monitor_the_pointer_went_to() {
+        let mut wm = empty_ext();
+        moved(&mut wm, 1500., 400., PointerTarget::Other);
+        wm.handle(Event::WindowCreated(normal(2)));
+        assert_eq!(wm.focused_window(), Some(w(2)));
+        assert_eq!(wm.focused_monitor(), Some(&"ext".into()));
+    }
+
+    #[test]
+    fn foc_10_a_monitor_with_windows_waits_for_a_window_crossing() {
+        let mut wm = two_monitors_one_window_each();
+        act(&mut wm, Action::Focus(Direction::Left));
+        moved(&mut wm, 500., 400., win(1));
+        moved(&mut wm, 1002., 2., PointerTarget::Other);
+        assert_eq!(wm.focused_window(), Some(w(1)));
+        assert_eq!(wm.focused_monitor(), Some(&"main".into()));
+    }
+
+    #[test]
+    fn foc_10_moving_within_the_monitor_doesnt_take_focus_back() {
+        // Keyboard focus went to the other monitor while the pointer rested on the empty one.
+        let mut wm = empty_ext();
+        moved(&mut wm, 1500., 400., PointerTarget::Other);
+        act(&mut wm, Action::Focus(Direction::Left));
+        assert_eq!(wm.focused_window(), Some(w(1)));
+        moved(&mut wm, 1510., 410., PointerTarget::Other);
+        assert_eq!(wm.focused_window(), Some(w(1)));
+        assert_eq!(wm.focused_monitor(), Some(&"main".into()));
+    }
+
+    #[test]
+    fn foc_10_outside_every_monitor_changes_nothing() {
+        let mut wm = empty_ext();
+        moved(&mut wm, 1500., -10., PointerTarget::Other);
+        assert_eq!(wm.focused_monitor(), Some(&"main".into()));
     }
 
     #[test]

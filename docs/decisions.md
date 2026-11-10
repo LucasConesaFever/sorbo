@@ -5,6 +5,12 @@ Notable design decisions: what was decided, why, and the alternatives rejected. 
 
 ## 2026-11-10: screen wake, mi-wm leftovers
 
+### D47. Entering a monitor with an empty workspace focuses it (FOC-10)
+**What:** core remembers the monitor the pointer was last inside (by the monitors' usable frames). When a `PointerMoved` lands inside a different monitor whose visible workspace has no windows, that monitor becomes the focused one and focus is cleared, as KEY-4 already does for an empty monitor. No command is sent: macOS keeps the previous app active, as after FOC-8.
+**Why:** the author moved the pointer to a monitor showing an empty workspace and expected it to be the active one (a new window should open there; the menu bar should show it focused), as in Hyprland.
+**Cost:** keystrokes still go to the previously active app until a window is focused, since nothing on an empty workspace can take them.
+**Rejected:** re-checking on every move inside the monitor (after keyboard focus moved elsewhere, nudging the mouse on the empty monitor would pull focus back); also focusing a monitor with windows when the pointer is over its gaps (the pointer reaches one of its windows anyway, and FOC-1 handles that).
+
 ### D46. The focus guard lasts its full 500 ms, even after the app confirms our window (FOC-1, FOC-7)
 **What:** after `Focus`, `wm-macos` keeps overriding the app's own choice of window for the whole `HOLD_FOCUS_FOR` (500 ms, up to 2 times), instead of stopping at the first report of our window. Once our window has been reported, only a window parked on a hidden workspace is overridden; another window of the app on screen is believed.
 **Why:** found in daily use: kitty had windows on workspaces 2 (shown) and 6 (hidden) of one monitor. Moving the pointer onto the workspace 2 window focused it, kitty reported it, and 25 ms later reported its workspace 6 window instead (its last active one). The guard had already ended, so core believed it and FOC-7 switched the monitor to 6; the next crossing switched it back.

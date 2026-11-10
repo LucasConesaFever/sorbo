@@ -71,6 +71,7 @@ Neither happens with Hyprland on Linux. The goal is to get Hyprland-like behavio
 - **FOC-7.** When macOS moves focus by itself (Cmd+`, Cmd+Tab, Dock click) to a window on a non-visible workspace, the WM switches to that workspace (Hyprland-like). If the pointer isn't over the newly focused window, it warps to its center.
 - **FOC-8.** When the active app quits and macOS activates another app in its place, the WM doesn't follow it to a hidden workspace: it stays on the current workspace, empty if it is, with no window focused (Hyprland-like) *(author, added 2026-11-08)*. Cmd+Tab, Cmd+` and Dock clicks still follow FOC-7.
 - **FOC-9.** The area a floating window covers on a visible workspace belongs to that window, as if floating windows were always above tiled ones (Hyprland-like). The pointer crossing into that area focuses the floating window and brings it to the front, even when a tiled window had covered it. Popups and the pointer's own window, if it's floating, still decide as before *(author reported floating windows unreachable behind tiles, 2026-11-08)*.
+- **FOC-10.** Moving the pointer into a monitor whose visible workspace is empty makes that monitor the focused one, with no window focused, so a new window opens there and the menu bar shows that workspace as focused (Hyprland-like). A monitor with windows still waits for the pointer to cross into one (FOC-1). Moving within a monitor, or out to its menu bar and back, isn't entering it *(author, added 2026-11-10)*.
 
 ### Windows and applications
 
