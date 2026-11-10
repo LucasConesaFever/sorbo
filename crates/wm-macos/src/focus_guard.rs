@@ -4,6 +4,10 @@
 //! report its previously active window 3 as focused right after we raised 4. Passing that
 //! on made core switch focus (and workspace) to window 3. For a short while after `Focus`,
 //! a different window reported by the same app is overridden instead of believed.
+//!
+//! The app confirming our window doesn't end that: kitty confirmed it and then, 25 ms later,
+//! focused its window on a hidden workspace, which made FOC-7 switch workspaces (D46). After
+//! the confirmation only a hidden window is overridden: the user can't have clicked one.
 
 use std::time::{Duration, Instant};
 
@@ -21,6 +25,8 @@ pub struct PendingFocus {
     pub pid: i32,
     pub until: Instant,
     pub reasserts_left: u8,
+    /// The app has reported our window as focused at least once.
+    pub confirmed: bool,
 }
 
 /// What to do with an app's report of its focused window.
@@ -32,11 +38,13 @@ pub enum FocusReport {
     Reassert,
 }
 
-/// Decides what to do when app `pid` reports `focused` as its focused window at `now`.
+/// Decides what to do when app `pid` reports `focused` as its focused window at `now`;
+/// `focused_hidden` says whether that window is parked on a hidden workspace.
 pub fn decide(
     pending: Option<PendingFocus>,
     pid: i32,
     focused: Option<WindowId>,
+    focused_hidden: bool,
     now: Instant,
 ) -> FocusReport {
     match pending {
@@ -45,11 +53,29 @@ pub fn decide(
                 && now < p.until
                 && p.reasserts_left > 0
                 && focused.is_some()
-                && focused != Some(p.id) =>
+                && focused != Some(p.id)
+                && (!p.confirmed || focused_hidden) =>
         {
             FocusReport::Reassert
         }
         _ => FocusReport::Report,
+    }
+}
+
+/// The pending focus after app `pid`'s report of `focused` was passed on to core: our window
+/// marks it confirmed and it stays until it runs out; another window of that app ends it.
+pub fn after_report(
+    pending: Option<PendingFocus>,
+    pid: i32,
+    focused: Option<WindowId>,
+) -> Option<PendingFocus> {
+    match pending {
+        Some(p) if p.pid == pid && focused == Some(p.id) => Some(PendingFocus {
+            confirmed: true,
+            ..p
+        }),
+        Some(p) if p.pid == pid => None,
+        other => other,
     }
 }
 
@@ -165,6 +191,7 @@ mod tests {
             pid: 50,
             until: now + HOLD_FOCUS_FOR,
             reasserts_left: MAX_REASSERTS,
+            confirmed: false,
         }
     }
 
@@ -172,7 +199,7 @@ mod tests {
     fn foc_requested_window_is_reported() {
         let now = Instant::now();
         assert_eq!(
-            decide(Some(pending(now)), 50, Some(WindowId(4)), now),
+            decide(Some(pending(now)), 50, Some(WindowId(4)), false, now),
             FocusReport::Report
         );
     }
@@ -181,7 +208,7 @@ mod tests {
     fn foc_app_picking_its_other_window_is_overridden() {
         let now = Instant::now();
         assert_eq!(
-            decide(Some(pending(now)), 50, Some(WindowId(3)), now),
+            decide(Some(pending(now)), 50, Some(WindowId(3)), false, now),
             FocusReport::Reassert
         );
     }
@@ -191,7 +218,7 @@ mod tests {
         let now = Instant::now();
         let later = now + HOLD_FOCUS_FOR + Duration::from_millis(1);
         assert_eq!(
-            decide(Some(pending(now)), 50, Some(WindowId(3)), later),
+            decide(Some(pending(now)), 50, Some(WindowId(3)), false, later),
             FocusReport::Report
         );
     }
@@ -202,7 +229,7 @@ mod tests {
         let mut p = pending(now);
         p.reasserts_left = 0;
         assert_eq!(
-            decide(Some(p), 50, Some(WindowId(3)), now),
+            decide(Some(p), 50, Some(WindowId(3)), false, now),
             FocusReport::Report
         );
     }
@@ -211,12 +238,46 @@ mod tests {
     fn foc_other_apps_are_reported() {
         let now = Instant::now();
         assert_eq!(
-            decide(Some(pending(now)), 77, Some(WindowId(9)), now),
+            decide(Some(pending(now)), 77, Some(WindowId(9)), false, now),
             FocusReport::Report
         );
         assert_eq!(
-            decide(None, 50, Some(WindowId(3)), now),
+            decide(None, 50, Some(WindowId(3)), false, now),
             FocusReport::Report
         );
+    }
+
+    #[test]
+    fn foc_1_the_guard_outlives_the_confirmation() {
+        // Found in daily use: kitty confirmed the window sorbo focused, then 25 ms later
+        // focused its window on a hidden workspace, and FOC-7 switched to it.
+        let now = Instant::now();
+        let p = after_report(Some(pending(now)), 50, Some(WindowId(4)));
+        assert_eq!(p.map(|p| p.confirmed), Some(true));
+        let soon = now + Duration::from_millis(25);
+        assert_eq!(
+            decide(p, 50, Some(WindowId(5)), true, soon),
+            FocusReport::Reassert
+        );
+    }
+
+    #[test]
+    fn foc_1_after_the_confirmation_a_shown_window_is_believed() {
+        // A click on another of the app's windows on screen is the user's choice.
+        let now = Instant::now();
+        let p = after_report(Some(pending(now)), 50, Some(WindowId(4)));
+        let soon = now + Duration::from_millis(25);
+        assert_eq!(
+            decide(p, 50, Some(WindowId(13)), false, soon),
+            FocusReport::Report
+        );
+        assert_eq!(after_report(p, 50, Some(WindowId(13))), None);
+    }
+
+    #[test]
+    fn foc_1_another_apps_report_leaves_the_guard() {
+        let now = Instant::now();
+        let p = Some(pending(now));
+        assert_eq!(after_report(p, 77, Some(WindowId(9))), p);
     }
 }

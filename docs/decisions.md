@@ -5,6 +5,12 @@ Notable design decisions: what was decided, why, and the alternatives rejected. 
 
 ## 2026-11-10: screen wake, mi-wm leftovers
 
+### D46. The focus guard lasts its full 500 ms, even after the app confirms our window (FOC-1, FOC-7)
+**What:** after `Focus`, `wm-macos` keeps overriding the app's own choice of window for the whole `HOLD_FOCUS_FOR` (500 ms, up to 2 times), instead of stopping at the first report of our window. Once our window has been reported, only a window parked on a hidden workspace is overridden; another window of the app on screen is believed.
+**Why:** found in daily use: kitty had windows on workspaces 2 (shown) and 6 (hidden) of one monitor. Moving the pointer onto the workspace 2 window focused it, kitty reported it, and 25 ms later reported its workspace 6 window instead (its last active one). The guard had already ended, so core believed it and FOC-7 switched the monitor to 6; the next crossing switched it back.
+**Cost:** a Cmd+` to the app's window on a hidden workspace within 500 ms of focus-follows-mouse is overridden twice before it's followed.
+**Rejected:** ignoring every report of a hidden window shortly after `Focus` (Cmd+Tab/Cmd+` still need FOC-7); not activating the app on focus-follows-mouse (keyboard input would go to the wrong app).
+
 ### D45. `./wm.sh install` no longer moves mi-wm installs over (NAME-2 to NAME-4 retired) *(author)*
 **What:** the mi-wm migration (`migrate_from_mi_wm`, `stop_mi_wm`, the `mi-wm local signing` clean-up, `tests/migration.sh` and its CI step) and the README's "Coming from mi-wm" section are removed. The pre-HARD-1 `sorbo local signing` clean-up stays.
 **Why:** the author's own Mac is the only mi-wm install there ever was, and it's already moved over; in the public repo the code only added surface.

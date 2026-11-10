@@ -15,7 +15,7 @@ use objc2_core_foundation::CFRunLoopTimer;
 use super::{Shared, arm, ax, observers, run_or_retry};
 use crate::focus_guard::{
     Activation, ActivationOutcome, FocusReport, HOLD_FOCUS_FOR, HeldActivation, MAX_REASSERTS,
-    PendingFocus, QUIT_WAIT, decide,
+    PendingFocus, QUIT_WAIT, after_report, decide,
 };
 use crate::wm_log;
 
@@ -47,6 +47,7 @@ pub(crate) fn focus(s: &mut Shared, id: WindowId) {
         pid: w.pid,
         until: Instant::now() + HOLD_FOCUS_FOR,
         reasserts_left: MAX_REASSERTS,
+        confirmed: false,
     });
 }
 
@@ -191,12 +192,11 @@ pub(crate) fn report_focus(s: &mut Shared, pid: i32) {
         {
             id = new_id;
         }
-        match decide(s.pending_focus, pid, Some(id), Instant::now()) {
+        let hidden = s.windows.get(id).is_some_and(|w| w.hidden);
+        match decide(s.pending_focus, pid, Some(id), hidden, Instant::now()) {
             FocusReport::Reassert => reassert(s),
             FocusReport::Report => {
-                if s.pending_focus.is_some_and(|p| p.pid == pid) {
-                    s.pending_focus = None;
-                }
+                s.pending_focus = after_report(s.pending_focus, pid, Some(id));
                 s.push(Event::WindowFocused(id));
             }
         }
