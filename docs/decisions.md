@@ -3,6 +3,19 @@
 Notable design decisions: what was decided, why, and the alternatives rejected. Newest first.
 "(author)" means the author decided. Everything else is the designer's call, made on the author's instruction to make calls and explain them.
 
+## 2026-11-10: screen wake, mi-wm leftovers
+
+### D45. `./wm.sh install` no longer moves mi-wm installs over (NAME-2 to NAME-4 retired) *(author)*
+**What:** the mi-wm migration (`migrate_from_mi_wm`, `stop_mi_wm`, the `mi-wm local signing` clean-up, `tests/migration.sh` and its CI step) and the README's "Coming from mi-wm" section are removed. The pre-HARD-1 `sorbo local signing` clean-up stays.
+**Why:** the author's own Mac is the only mi-wm install there ever was, and it's already moved over; in the public repo the code only added surface.
+**Cost:** anyone who did run mi-wm would have to remove it by hand. Nobody did.
+
+### D44. Apps with windows lost in a display change are asked for their windows again (MON-7)
+**What:** when a window is kept as lost (D30), `wm-macos` asks its app for its window list (`AXWindows`) 1, 5, 15 and 45 s later, on the lost-window timer. A rebuilt window found this way takes the lost window's place as before. Each look is logged with how many of the app's windows are still lost.
+**Why:** found in daily use after a screen wake: macOS rebuilt the kitty and PyCharm windows on the external monitors but didn't announce them until each app was clicked, minutes later. By then D30's 60 s had passed, so they arrived as new windows and were tiled on the focused workspace, on the laptop. Only Slack, which took focus within 10 s, kept its place.
+**Cost:** up to four extra `AXWindows` reads per app after a display change. Not yet confirmed on a real wake that macOS lists a rebuilt window before its app is activated; the log line says so the next time. If it doesn't, the next step is keeping lost windows until their app is activated.
+**Rejected:** keeping lost windows longer on their own (they still only come back on a click, and a really closed window would leave an empty tile all that time); placing every new window on the monitor under its frame (changes where new windows go everywhere, not just after a wake).
+
 ## 2026-11-08: sharp edges
 
 ### D43. Bounded hit tests, guarded callbacks, checked types (HARD-5, HARD-6, HARD-7; audit findings 5–7)

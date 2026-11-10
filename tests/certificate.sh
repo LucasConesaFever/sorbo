@@ -140,7 +140,7 @@ case_install_signs_before_stopping() {
     body="$(cd "$ROOT" && bash -c 'source ./wm.sh; declare -f do_install')"
     local sign stop
     sign="$(grep -n "sign_and_retire" <<<"$body" | head -1 | cut -d: -f1)"
-    stop="$(grep -n "do_stop\|migrate_from_mi_wm" <<<"$body" | head -1 | cut -d: -f1)"
+    stop="$(grep -n "do_stop" <<<"$body" | head -1 | cut -d: -f1)"
     [[ -n "$sign" && -n "$stop" ]] || { fail "$name" "missing steps"; return; }
     ((sign < stop)) || { fail "$name" "signs after stopping"; return; }
     ok "$name"
@@ -158,17 +158,6 @@ case_failed_openssl_cleans_tmp() {
     left="$(find "$h/tmp" -maxdepth 1 -name 'sorbo-cert.*')"
     [[ -z "$left" ]] || { fail "$name" "left $left"; return; }
     ! grep -q "^security import" "$h/calls.log" || { fail "$name" "imported anyway"; return; }
-    ok "$name"
-}
-
-case_mi_wm_certificate_deleted_after_sign() {
-    local h name="mi-wm certificate deleted after signing"
-    h="$(new_home)"
-    echo "mi-wm local signing" >"$h/certs"
-    run "$h" sign_and_retire x || { fail "$name" "exit $? ($(cat "$h/out"))"; return; }
-    grep -qF 'security delete-identity -c mi-wm\ local\ signing' "$h/calls.log" ||
-        { fail "$name" "not deleted: $(cat "$h/calls.log")"; return; }
-    [[ "$(cat "$h/changed")" == "1" ]] || { fail "$name" "CERT_CHANGED not set"; return; }
     ok "$name"
 }
 
@@ -203,7 +192,6 @@ case_no_old_certificate_no_change
 case_denied_sign_keeps_old
 case_install_signs_before_stopping
 case_failed_openssl_cleans_tmp
-case_mi_wm_certificate_deleted_after_sign
 case_interrupt_cleans_tmp
 case_users_openssl_is_ignored
 

@@ -35,11 +35,11 @@ cargo fmt --all
 
 Before marking a task done, run `cargo fmt --all`, `cargo clippy` and `cargo test`, and report the results.
 
-CI (`.github/workflows/ci.yml`) runs the same checks plus `bash tests/migration.sh` and `bash tests/certificate.sh` on macOS, and `cargo test -p wm-core` on Linux. The project is MIT-licensed (`LICENSE`); the crates are never published (`publish = false`). Rust 1.89 or later.
+CI (`.github/workflows/ci.yml`) runs the same checks plus `bash tests/certificate.sh` on macOS, and `cargo test -p wm-core` on Linux. The project is MIT-licensed (`LICENSE`); the crates are never published (`publish = false`). Rust 1.89 or later.
 
 ## Status
 
-Implemented: the core (workspaces, dwindle tiling, focus, multiple monitors), the macOS platform, running under launchd (`./wm.sh install`, see `README.md`; log at `~/Library/Logs/sorbo/wm.log`), workspaces in the menu bar, the config file (`config/sorbo.toml` is the shipped default), floating window rules, the focus border (JankyBorders, `config/bordersrc`), the resize mode, the rename from mi-wm (`./wm.sh install` moves an mi-wm install over once; `bash tests/migration.sh`), and the hardening from two security audits: untrusted app data (SAFE-1..10) and sharp edges (HARD-1..7).
+Implemented: the core (workspaces, dwindle tiling, focus, multiple monitors), the macOS platform, running under launchd (`./wm.sh install`, see `README.md`; log at `~/Library/Logs/sorbo/wm.log`), workspaces in the menu bar, the config file (`config/sorbo.toml` is the shipped default), floating window rules, the focus border (JankyBorders, `config/bordersrc`), the resize mode, and the hardening from two security audits: untrusted app data (SAFE-1..10) and sharp edges (HARD-1..7).
 
 - Dev loop: `./wm.sh stop`, then `cargo run -p sorbo` from a terminal that has Accessibility permission (Ctrl+C restores hidden windows), then `./wm.sh start`. A second copy refuses to start while one is running.
 - Diagnostic spikes live in `crates/wm-macos/examples/`; run `spike_pointer` to see what macOS reports for a misbehaving popup.

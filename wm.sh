@@ -19,7 +19,6 @@ OLD_CERT_NAME="sorbo local signing"
 # OpenSSL 3, whose .p12 files `security` rejects) is never picked up; only
 # tests/certificate.sh sets it, to a fake.
 OPENSSL="${SORBO_TEST_OPENSSL:-/usr/bin/openssl}"
-MI_WM_CERT_NAME="mi-wm local signing"
 RETIRED=()
 BIN="$HOME/.local/bin/sorbo"
 PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
@@ -28,14 +27,6 @@ CONFIG="$HOME/.config/sorbo/sorbo.toml"
 BORDERS_CONFIG="$HOME/.config/borders/bordersrc"
 BORDERS_FORMULA="FelixKratz/formulae/borders"
 DOMAIN="gui/$(id -u)"
-
-# Where an install from before the rename to sorbo put things (NAME-2, NAME-3).
-OLD_LABEL="io.github.lucasconesafever.mi-wm"
-OLD_BIN="$HOME/.local/bin/mi-wm"
-OLD_PLIST="$HOME/Library/LaunchAgents/$OLD_LABEL.plist"
-OLD_CONFIG="$HOME/.config/mi-wm/mi-wm.toml"
-OLD_LOG_DIR="$HOME/Library/Logs/mi-wm"
-OLD_SUPPORT_DIR="$HOME/Library/Application Support/mi-wm"
 
 usage() {
     sed -n '4,9p' "$0" | sed 's/^# //'
@@ -52,26 +43,7 @@ is_running() {
     launchctl print "$DOMAIN/$LABEL" 2>/dev/null | grep -q '^[[:space:]]*pid = '
 }
 
-# Boots out mi-wm (the name before sorbo) if it's still loaded: its lock file differs from
-# sorbo's, so nothing else would stop the two running together (NAME-2). Returns 0 if it
-# stopped it, 1 if it wasn't loaded, 2 if stopping it failed.
-stop_mi_wm() {
-    launchctl print "$DOMAIN/$OLD_LABEL" >/dev/null 2>&1 || return 1
-    if ! launchctl bootout "$DOMAIN/$OLD_LABEL"; then
-        echo "Could not stop mi-wm ($OLD_LABEL)" >&2
-        return 2
-    fi
-    echo "Stopped mi-wm"
-}
-
 do_stop() {
-    # Before the first sorbo install, a running mi-wm would otherwise be left next to a dev
-    # build of sorbo (`./wm.sh stop`, then `cargo run -p sorbo`).
-    local status=0
-    stop_mi_wm || status=$?
-    if [[ $status == 2 ]]; then
-        exit 1
-    fi
     if is_loaded; then
         # bootout sends SIGTERM and waits: the WM puts hidden windows back and exits 0.
         launchctl bootout "$DOMAIN/$LABEL"
@@ -157,21 +129,17 @@ sign_binary() {
     codesign --force --options runtime --sign "$CERT_NAME" --identifier "$LABEL" "$1"
 }
 
-# After the first signing with the new certificate, removes the old ones: sorbo's before
-# HARD-1 and mi-wm's. Their keys let codesign sign silently, and each matches an Accessibility
-# grant (D39). Sets CERT_CHANGED=1 so the install can say Accessibility will ask again.
+# After the first signing with the new certificate, removes the one from before HARD-1. Its
+# key let codesign sign silently, and it matches an Accessibility grant (D39). Sets CERT_CHANGED=1 so the install can say Accessibility will ask again.
 retire_old_certificate() {
-    local name
-    for name in "$OLD_CERT_NAME" "$MI_WM_CERT_NAME"; do
-        if security find-certificate -c "$name" >/dev/null 2>&1; then
-            if security delete-identity -c "$name" >/dev/null 2>&1; then
-                RETIRED+=("$name")
-            else
-                echo "warning: could not remove the old \"$name\" certificate; remove it in Keychain Access" >&2
-            fi
-            CERT_CHANGED=1
+    if security find-certificate -c "$OLD_CERT_NAME" >/dev/null 2>&1; then
+        if security delete-identity -c "$OLD_CERT_NAME" >/dev/null 2>&1; then
+            RETIRED+=("$OLD_CERT_NAME")
+        else
+            echo "warning: could not remove the old \"$OLD_CERT_NAME\" certificate; remove it in Keychain Access" >&2
         fi
-    done
+        CERT_CHANGED=1
+    fi
 }
 
 # sign_and_retire <path>: the old certificate goes only once signing with the new one worked.
@@ -273,54 +241,6 @@ install_border() {
     fi
 }
 
-# Moves an install from before the rename (mi-wm) over to sorbo, once (NAME-2, NAME-3).
-# Each step does nothing when there's nothing to move. Sets MIGRATED=1 when it did
-# anything. Returns 1 when a step fails, and the install stops there, before
-# install_config could create a default config. The checks are explicit: bash ignores
-# `set -e` inside a function called from an `if` or `||`.
-migrate_from_mi_wm() {
-    # First, so mi-wm and sorbo never run together: their lock files differ (NAME-2).
-    local status=0
-    stop_mi_wm || status=$?
-    case $status in
-    0) MIGRATED=1 ;;
-    2) return 1 ;;
-    esac
-    if [[ -e "$OLD_PLIST" ]]; then
-        rm -f "$OLD_PLIST"
-        echo "Removed the mi-wm login entry $OLD_PLIST"
-        MIGRATED=1
-    fi
-    if [[ -e "$OLD_BIN" ]]; then
-        rm -f "$OLD_BIN"
-        echo "Removed $OLD_BIN"
-        MIGRATED=1
-    fi
-    # -L too: a dotfiles symlink counts, even a broken one, and mv moves the link itself.
-    if [[ -e "$OLD_CONFIG" || -L "$OLD_CONFIG" ]]; then
-        if [[ -e "$CONFIG" || -L "$CONFIG" ]]; then
-            echo "Your old config $OLD_CONFIG was left in place: $CONFIG already exists"
-        else
-            mkdir -p "$(dirname "$CONFIG")" && mv "$OLD_CONFIG" "$CONFIG" ||
-                { echo "Could not move your config $OLD_CONFIG to $CONFIG" >&2; return 1; }
-            rmdir "$(dirname "$OLD_CONFIG")" 2>/dev/null || true
-            echo "Moved your config $OLD_CONFIG to $CONFIG"
-            MIGRATED=1
-        fi
-    fi
-    if [[ -d "$OLD_LOG_DIR" && ! -e "$LOG_DIR" ]]; then
-        mkdir -p "$(dirname "$LOG_DIR")" && mv "$OLD_LOG_DIR" "$LOG_DIR" ||
-            { echo "Could not move the logs $OLD_LOG_DIR to $LOG_DIR" >&2; return 1; }
-        echo "Moved the logs $OLD_LOG_DIR to $LOG_DIR"
-        MIGRATED=1
-    fi
-    if [[ -d "$OLD_SUPPORT_DIR" ]]; then
-        rm -rf "$OLD_SUPPORT_DIR"
-        echo "Removed $OLD_SUPPORT_DIR"
-        MIGRATED=1
-    fi
-}
-
 do_install() {
     if ! command -v cargo >/dev/null 2>&1; then
         echo "cargo not found: install Rust from https://rustup.rs" >&2
@@ -341,7 +261,6 @@ do_install() {
         exit 1
     }
 
-    migrate_from_mi_wm || exit 1
     do_stop
     mkdir -p "$(dirname "$BIN")"
     # Copy then rename: overwriting a signed binary in place can get its next launch killed.
@@ -362,14 +281,7 @@ Commands: ./wm.sh install | restart | stop | start | logs | uninstall
 The first time, macOS asks to allow sorbo in System Settings > Privacy & Security >
 Accessibility. The WM starts by itself once it's allowed. Updates keep the permission.
 EOF
-    if [[ -n "${MIGRATED:-}" ]]; then
-        cat <<EOF
-
-mi-wm is now sorbo. macOS asks again for Accessibility, this time for sorbo, once.
-Remove the old mi-wm entry in System Settings > Privacy & Security > Accessibility:
-it still trusts binaries signed as mi-wm.
-EOF
-    elif [[ -n "${CERT_CHANGED:-}" ]]; then
+    if [[ -n "${CERT_CHANGED:-}" ]]; then
         cat <<EOF
 
 New signing certificate: allow sorbo in Accessibility again. Turning the old entry off
@@ -379,12 +291,6 @@ EOF
     if ((${#RETIRED[@]} > 0)); then
         echo
         echo "Removed the old signing certificate(s): ${RETIRED[*]}."
-    fi
-    if [[ -z "${MIGRATED:-}" && " ${RETIRED[*]-} " == *"mi-wm"* ]]; then
-        cat <<EOF
-Also remove the old mi-wm entry in System Settings > Privacy & Security > Accessibility:
-it still trusts binaries signed as mi-wm.
-EOF
     fi
 }
 
@@ -409,7 +315,7 @@ To remove the rest by hand:
 EOF
 }
 
-# Sourced (tests/migration.sh): define the functions, run nothing.
+# Sourced (tests/certificate.sh): define the functions, run nothing.
 [[ "${BASH_SOURCE[0]}" == "$0" ]] || return 0
 
 case "${1:-}" in

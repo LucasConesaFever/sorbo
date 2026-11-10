@@ -23,15 +23,7 @@ Quit any other window manager (AeroSpace, yabai, Rectangle...) first.
 
 ### Updating from an install before 2026-11-08
 
-Older installs signed sorbo with a `sorbo local signing` certificate whose key `codesign` could use without asking. The next `./wm.sh install` creates `sorbo signing`, signs with it, and then removes the old certificate (and mi-wm's `mi-wm local signing`, if it's still there). Because the signature changes, sorbo has to be allowed in Accessibility again. Turning the old sorbo entry off and on isn't enough: remove it with −, run `./wm.sh restart`, and allow sorbo in the prompt macOS shows.
-
-### Coming from mi-wm
-
-sorbo was called mi-wm until 2026-11-08. Running `./wm.sh install` over an mi-wm install moves it over once:
-- it stops mi-wm and removes its login entry and binary, so the two never run together;
-- it moves `~/.config/mi-wm/mi-wm.toml` to `~/.config/sorbo/sorbo.toml` (unless that already exists) and the logs to `~/Library/Logs/sorbo/`.
-
-macOS then asks once to allow sorbo in Accessibility. The install also removes the old `mi-wm local signing` certificate. Remove the old mi-wm Accessibility entry by hand: it still trusts binaries signed as mi-wm.
+Older installs signed sorbo with a `sorbo local signing` certificate whose key `codesign` could use without asking. The next `./wm.sh install` creates `sorbo signing`, signs with it, and then removes the old certificate. Because the signature changes, sorbo has to be allowed in Accessibility again. Turning the old sorbo entry off and on isn't enough: remove it with −, run `./wm.sh restart`, and allow sorbo in the prompt macOS shows.
 
 ## Menu bar
 

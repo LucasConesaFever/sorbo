@@ -37,8 +37,6 @@ jobs:
         run: cargo clippy --all-targets -- -D warnings
       - name: Tests
         run: cargo test
-      - name: wm.sh migration tests
-        run: bash tests/migration.sh
       - name: wm.sh certificate tests
         run: bash tests/certificate.sh
 

@@ -190,9 +190,9 @@ Neither happens with Hyprland on Linux. The goal is to get Hyprland-like behavio
 ### Name *(added 2026-11-08)*
 
 - **NAME-1.** The project is named sorbo. Its binary, menu bar, messages and files use the name: `~/.local/bin/sorbo`, `~/.config/sorbo/sorbo.toml`, `~/Library/Logs/sorbo/`.
-- **NAME-2.** Installing sorbo over mi-wm stops mi-wm and removes its login entry and binary before sorbo starts. The two never run together.
-- **NAME-3.** The install moves `~/.config/mi-wm/mi-wm.toml` to `~/.config/sorbo/sorbo.toml` unless that file already exists, and moves the logs the same way. Settings are never lost or overwritten. If a move fails, the install stops before creating a default config.
-- **NAME-4.** The install says that macOS will ask again for Accessibility. It also says what's left to remove by hand: the old certificate and the old Accessibility entry.
+- **NAME-2.** *Retired 2026-11-10 (D45).* Installing sorbo over mi-wm stopped mi-wm and removed its login entry and binary.
+- **NAME-3.** *Retired 2026-11-10 (D45).* The install moved mi-wm's config and logs over to sorbo's.
+- **NAME-4.** *Retired 2026-11-10 (D45).* The install said what was left of mi-wm to remove by hand.
 
 ### Untrusted app data *(added 2026-11-08)*
 

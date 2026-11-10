@@ -28,7 +28,6 @@ Only one copy runs at a time; a second one refuses to start.
 cargo fmt --all
 cargo clippy --all-targets -- -D warnings
 cargo test
-bash tests/migration.sh    # when wm.sh changes
 bash tests/certificate.sh  # when wm.sh changes
 ```
 
