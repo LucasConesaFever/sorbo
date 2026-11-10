@@ -38,12 +38,23 @@ pub struct LostWindow {
     pub id: WindowId,
     pub pid: i32,
     pub kind: WindowKind,
-    /// Where it last was (the last frame we set), to tell an app's windows apart.
+    /// Where it last was (`last_place`), to tell an app's windows apart.
     pub frame: Option<Rect>,
     pub intent: Option<Intent>,
     pub lost_at: Instant,
     /// How many of the `RESCAN_AFTER` looks at its app have been done.
     pub rescans_done: usize,
+}
+
+/// Where a window was when it went missing, to match it with the window macOS shows again:
+/// a hidden window sits where it was parked, not in its tile, which a shown window of the
+/// same app may have the same of (D44).
+pub fn last_place(hidden: bool, parked: Option<Rect>, last_set: Option<Rect>) -> Option<Rect> {
+    if hidden {
+        parked.or(last_set)
+    } else {
+        last_set
+    }
 }
 
 /// True when a window destroyed at `now` may just be rebuilt by macOS.
@@ -71,8 +82,9 @@ impl LostWindows {
         self.windows.iter().filter(|w| w.pid == pid).count()
     }
 
-    /// The lost window of app `pid` and the same `kind` nearest to `frame`, if one is still
-    /// waiting at `now`. A popup or dialog never takes over a normal window's place.
+    /// The lost window of app `pid` and the same `kind` nearest to `frame` in position and
+    /// size, if one is still waiting at `now`. Size tells apart windows parked in the same
+    /// corner (D44). A popup or dialog never takes over a normal window's place.
     pub fn claim(
         &mut self,
         pid: i32,
@@ -81,8 +93,11 @@ impl LostWindows {
         now: Instant,
     ) -> Option<LostWindow> {
         let distance = |w: &LostWindow| {
-            w.frame
-                .map_or(f64::MAX, |f| (f.x - frame.x).hypot(f.y - frame.y))
+            w.frame.map_or(f64::MAX, |f| {
+                (f.x - frame.x).hypot(f.y - frame.y)
+                    + (f.width - frame.width).abs()
+                    + (f.height - frame.height).abs()
+            })
         };
         let index = self
             .windows
@@ -286,5 +301,52 @@ mod tests {
         assert!(last < KEEP_LOST_FOR);
         assert_eq!(list.due_rescans(now + last), vec![10]);
         assert_eq!(list.next_wake(), Some(now + KEEP_LOST_FOR));
+    }
+
+    #[test]
+    fn mon_7_a_hidden_window_is_matched_where_it_was_parked() {
+        let tile = Rect::new(2061.0, -741.0, 1910.0, 1040.0);
+        let parked = Rect::new(3966.0, 303.0, 1910.0, 1040.0);
+        assert_eq!(last_place(true, Some(parked), Some(tile)), Some(parked));
+        assert_eq!(last_place(true, None, Some(tile)), Some(tile));
+        assert_eq!(last_place(false, Some(parked), Some(tile)), Some(tile));
+    }
+
+    #[test]
+    fn mon_7_the_shown_window_doesnt_take_the_hidden_ones_place() {
+        let now = Instant::now();
+        let tile = Rect::new(2061.0, -741.0, 1910.0, 1040.0);
+        let parked = Rect::new(3966.0, 303.0, 1910.0, 1040.0);
+        let mut list = LostWindows::default();
+        // The hidden one went missing first, so a tie would hand it the shown one's place.
+        list.remember(LostWindow {
+            frame: last_place(true, Some(parked), Some(tile)),
+            ..lost(4, 10, 0.0, now)
+        });
+        list.remember(LostWindow {
+            frame: last_place(false, None, Some(tile)),
+            ..lost(2, 10, 0.0, now)
+        });
+        let claimed = list.claim(10, WindowKind::Normal, tile, now);
+        assert_eq!(claimed.map(|w| w.id), Some(WindowId(2)));
+        let claimed = list.claim(10, WindowKind::Normal, parked, now);
+        assert_eq!(claimed.map(|w| w.id), Some(WindowId(4)));
+    }
+
+    #[test]
+    fn mon_7_size_tells_apart_windows_parked_in_the_same_corner() {
+        let now = Instant::now();
+        let mut list = LostWindows::default();
+        list.remember(LostWindow {
+            frame: Some(Rect::new(3966.0, 303.0, 1910.0, 1040.0)),
+            ..lost(4, 10, 0.0, now)
+        });
+        list.remember(LostWindow {
+            frame: Some(Rect::new(3966.0, 303.0, 953.0, 1040.0)),
+            ..lost(6, 10, 0.0, now)
+        });
+        let half = Rect::new(3966.0, 303.0, 953.0, 1040.0);
+        let claimed = list.claim(10, WindowKind::Normal, half, now);
+        assert_eq!(claimed.map(|w| w.id), Some(WindowId(6)));
     }
 }

@@ -26,6 +26,8 @@ pub(crate) struct TrackedWindow {
     pub hidden: bool,
     /// The usable frame of the display the window was hidden from (for restore on exit).
     pub hidden_from: Option<Rect>,
+    /// Where a hidden window was parked: its position and size (MON-7, D44).
+    pub parked: Option<Rect>,
     /// The last placement core asked for, even if applying it failed (MON-7).
     pub intent: Option<Intent>,
 }
@@ -63,6 +65,7 @@ impl WindowTable {
                 confirmed: None,
                 hidden: false,
                 hidden_from: None,
+                parked: None,
                 intent: None,
             },
         );
@@ -88,6 +91,7 @@ impl WindowTable {
                 confirmed: None,
                 hidden: false,
                 hidden_from: None,
+                parked: None,
                 intent: None,
             },
         );
@@ -204,6 +208,7 @@ pub(crate) fn set_frame(table: &mut WindowTable, id: WindowId, frame: Rect) {
     w.last_set = Some(frame);
     w.hidden = false;
     w.hidden_from = None;
+    w.parked = None;
 }
 
 /// `Hide`: park the window in the bottom corner that shows least of it (spec 5.4).
@@ -240,6 +245,7 @@ pub(crate) fn hide(
     }
     w.hidden = true;
     w.hidden_from = displays.get(own).map(|d| d.info.frame);
+    w.parked = Some(Rect::new(p.x, p.y, width, height));
     Ok(())
 }
 
@@ -262,7 +268,9 @@ pub(crate) fn repark_hidden(table: &mut WindowTable, displays: &[Display]) {
             })
             .unwrap_or(0);
         let p = hide_position(frame.width, frame.height, own, &bounds);
-        ax::set_position(&w.element, p.x, p.y);
+        if ax::set_position(&w.element, p.x, p.y).0 == 0 {
+            w.parked = Some(Rect::new(p.x, p.y, frame.width, frame.height));
+        }
     }
 }
 

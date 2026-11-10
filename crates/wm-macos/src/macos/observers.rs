@@ -17,7 +17,7 @@ use crate::classify::{classify, reclassify_after, reports_focus_change};
 use crate::confirm::{confirmed_frame, next_recheck};
 use crate::echo::is_echo;
 use crate::hide::hide_retry_after;
-use crate::lost::{Intent, LostWindow, is_display_loss};
+use crate::lost::{Intent, LostWindow, is_display_loss, last_place};
 use crate::wm_log;
 
 /// Notifications registered on the application element.
@@ -306,7 +306,7 @@ pub(crate) fn lose_or_untrack(s: &mut Shared, id: WindowId) {
         id,
         pid: w.pid,
         kind: w.kind,
-        frame: w.last_set,
+        frame: last_place(w.hidden, w.parked, w.last_set),
         intent: w.intent,
         lost_at: now,
         rescans_done: 0,
