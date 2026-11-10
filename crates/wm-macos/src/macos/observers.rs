@@ -283,7 +283,8 @@ pub(crate) fn track_app_windows(s: &mut Shared, pid: i32) -> Vec<WindowInfo> {
 
 /// A window's element is gone. Right after a display change macOS may just be rebuilding
 /// it, so it's kept as lost (core isn't told) until its app shows it again or a minute
-/// passes (MON-7, D30); otherwise it's untracked as usual.
+/// passes (MON-7, D30, D44); otherwise it's untracked as usual. Its app is asked for its
+/// windows again on the `RESCAN_AFTER` schedule.
 pub(crate) fn lose_or_untrack(s: &mut Shared, id: WindowId) {
     let now = Instant::now();
     let normal = s
@@ -308,12 +309,13 @@ pub(crate) fn lose_or_untrack(s: &mut Shared, id: WindowId) {
         frame: w.last_set,
         intent: w.intent,
         lost_at: now,
+        rescans_done: 0,
     });
     arm_lost_timer(s, now);
 }
 
 fn arm_lost_timer(s: &Shared, now: Instant) {
-    if let (Some(timer), Some(at)) = (&s.lost_timer, s.lost.next_expiry()) {
+    if let (Some(timer), Some(at)) = (&s.lost_timer, s.lost.next_wake()) {
         arm(timer, at.saturating_duration_since(now));
     }
 }
@@ -329,6 +331,16 @@ pub(crate) unsafe extern "C-unwind" fn on_lost_timer(
 
 fn lost_due(s: &mut Shared) {
     let now = Instant::now();
+    // Most apps don't announce a rebuilt window until they're activated: go and look.
+    for pid in s.lost.due_rescans(now) {
+        for info in track_app_windows(s, pid) {
+            s.push(Event::WindowCreated(info));
+        }
+        wm_log!(
+            "looked at app {pid}'s windows again; {} still lost (MON-7)",
+            s.lost.count_for(pid)
+        );
+    }
     for id in s.lost.take_expired(now) {
         wm_log!("{id:?} didn't come back after the display change");
         s.push(Event::WindowDestroyed(id));

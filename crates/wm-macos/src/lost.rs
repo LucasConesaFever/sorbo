@@ -15,6 +15,15 @@ use wm_core::{Rect, WindowId, WindowKind};
 pub const LOSS_WINDOW: Duration = Duration::from_secs(5);
 /// How long a lost window waits to be claimed before it's reported destroyed.
 pub const KEEP_LOST_FOR: Duration = Duration::from_secs(60);
+/// When, after a window is lost, sorbo asks its app for its windows again. Most apps only
+/// announce a rebuilt window once they're activated, often long after `KEEP_LOST_FOR`, so
+/// sorbo goes looking instead of waiting (found after a screen wake, see D44).
+pub const RESCAN_AFTER: [Duration; 4] = [
+    Duration::from_secs(1),
+    Duration::from_secs(5),
+    Duration::from_secs(15),
+    Duration::from_secs(45),
+];
 
 /// The last placement core asked for, to apply again to the window that replaces it.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -33,6 +42,8 @@ pub struct LostWindow {
     pub frame: Option<Rect>,
     pub intent: Option<Intent>,
     pub lost_at: Instant,
+    /// How many of the `RESCAN_AFTER` looks at its app have been done.
+    pub rescans_done: usize,
 }
 
 /// True when a window destroyed at `now` may just be rebuilt by macOS.
@@ -53,6 +64,11 @@ impl LostWindows {
 
     pub fn is_empty(&self) -> bool {
         self.windows.is_empty()
+    }
+
+    /// How many of app `pid`'s windows are still lost.
+    pub fn count_for(&self, pid: i32) -> usize {
+        self.windows.iter().filter(|w| w.pid == pid).count()
     }
 
     /// The lost window of app `pid` and the same `kind` nearest to `frame`, if one is still
@@ -88,6 +104,35 @@ impl LostWindows {
         self.take_where(|w| w.pid == pid)
     }
 
+    /// The apps to look at again now: each app with a lost window whose next look is due,
+    /// once, in the order they were lost. Looks missed while sorbo was busy count as done.
+    pub fn due_rescans(&mut self, now: Instant) -> Vec<i32> {
+        let mut pids = Vec::new();
+        for w in &mut self.windows {
+            let passed = RESCAN_AFTER
+                .iter()
+                .take_while(|after| now >= w.lost_at + **after)
+                .count();
+            if passed > w.rescans_done {
+                w.rescans_done = passed;
+                if !pids.contains(&w.pid) {
+                    pids.push(w.pid);
+                }
+            }
+        }
+        pids
+    }
+
+    /// When the lost-window timer should fire next: the next look or the next expiry.
+    pub fn next_wake(&self) -> Option<Instant> {
+        let rescans = self.windows.iter().filter_map(|w| {
+            RESCAN_AFTER
+                .get(w.rescans_done)
+                .map(|after| w.lost_at + *after)
+        });
+        rescans.chain(self.next_expiry()).min()
+    }
+
     /// When the next lost window expires.
     pub fn next_expiry(&self) -> Option<Instant> {
         self.windows.iter().map(|w| w.lost_at + KEEP_LOST_FOR).min()
@@ -114,6 +159,7 @@ mod tests {
             frame: Some(Rect::new(x, 35.0, 953.0, 518.0)),
             intent: Some(Intent::Hidden),
             lost_at: at,
+            rescans_done: 0,
         }
     }
 
@@ -204,5 +250,41 @@ mod tests {
         assert_eq!(list.take_pid(10), vec![WindowId(2)]);
         assert_eq!(list.take_pid(10), vec![]);
         assert!(!list.is_empty());
+    }
+
+    #[test]
+    fn mon_7_lost_windows_apps_are_rescanned_on_a_schedule() {
+        let now = Instant::now();
+        let mut list = LostWindows::default();
+        list.remember(lost(2, 10, 0.0, now));
+        list.remember(lost(3, 10, 1733.0, now));
+        list.remember(lost(5, 11, 0.0, now + Duration::from_secs(2)));
+        assert_eq!(list.next_wake(), Some(now + RESCAN_AFTER[0]));
+        assert_eq!(list.due_rescans(now), Vec::<i32>::new());
+        assert_eq!((list.count_for(10), list.count_for(11)), (2, 1));
+        // Both of app 10's windows are due at 1 s: the app is looked at once.
+        assert_eq!(list.due_rescans(now + Duration::from_secs(1)), vec![10]);
+        assert_eq!(
+            list.due_rescans(now + Duration::from_secs(1)),
+            Vec::<i32>::new()
+        );
+        assert_eq!(list.next_wake(), Some(now + Duration::from_secs(3)));
+        // Looks missed while sorbo was busy collapse into one.
+        assert_eq!(
+            list.due_rescans(now + Duration::from_secs(20)),
+            vec![10, 11]
+        );
+        assert_eq!(list.next_wake(), Some(now + Duration::from_secs(45)));
+    }
+
+    #[test]
+    fn mon_7_after_the_last_rescan_only_the_expiry_is_left() {
+        let now = Instant::now();
+        let mut list = LostWindows::default();
+        list.remember(lost(2, 10, 0.0, now));
+        let last = *RESCAN_AFTER.last().unwrap();
+        assert!(last < KEEP_LOST_FOR);
+        assert_eq!(list.due_rescans(now + last), vec![10]);
+        assert_eq!(list.next_wake(), Some(now + KEEP_LOST_FOR));
     }
 }
