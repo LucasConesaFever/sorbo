@@ -22,6 +22,8 @@ use crate::{
     WorkspaceStatus, tree,
 };
 
+use windows::Refusal;
+
 #[derive(Debug, Default)]
 pub struct Wm {
     /// Connected monitors only.
@@ -41,6 +43,8 @@ pub struct Wm {
     pending_warp: Option<Point>,
     /// The last placement sent (or reported) for each managed window.
     placements: HashMap<WindowId, Placement>,
+    /// Tiled windows answering their tile with another frame (LAY-4).
+    refusals: HashMap<WindowId, Refusal>,
     /// Emit `Focus` for this window in reconcile.
     focus_request: Option<WindowId>,
     /// Warp the pointer to this window's center in reconcile.

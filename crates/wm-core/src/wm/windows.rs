@@ -9,6 +9,18 @@ use crate::{
 /// Share of the monitor a window gets the first time it floats.
 const FIRST_FLOAT_SHARE: f64 = 0.6;
 
+/// How many times in a row a tiled window may answer its tile with the same other frame
+/// before it floats there instead (LAY-4, D50).
+const REFUSALS_BEFORE_FLOATING: u8 = 3;
+
+/// A tiled window answering `tile` with `frame`, `times` times in a row (LAY-4).
+#[derive(Debug, Clone, Copy)]
+pub(super) struct Refusal {
+    tile: Rect,
+    frame: Rect,
+    times: u8,
+}
+
 /// Where a window floats when core picks the spot: centered, `FIRST_FLOAT_SHARE` of `area`.
 pub(super) fn first_float_frame(area: Rect) -> Rect {
     let (width, height) = (
@@ -141,6 +153,7 @@ impl Wm {
         };
         self.windows.remove(&id);
         self.placements.remove(&id);
+        self.refusals.remove(&id);
         if self.focused_window == Some(id) {
             self.focused_window = None;
             self.set_focus(successor, true);
@@ -201,6 +214,45 @@ impl Wm {
         }
     }
 
+    /// Counts a tiled window answering `tile` with `frame` (LAY-4). True on the third time in a
+    /// row it answers the same tile with the same frame: an app with a minimum size does
+    /// that, while a window dragged around reports a new frame each time.
+    fn refused_too_often(&mut self, id: WindowId, tile: Rect, frame: Rect) -> bool {
+        if tile.near(&frame) {
+            self.refusals.remove(&id);
+            return false;
+        }
+        let refusal = self.refusals.entry(id).or_insert(Refusal {
+            tile,
+            frame,
+            times: 0,
+        });
+        if !refusal.tile.near(&tile) || !refusal.frame.near(&frame) {
+            *refusal = Refusal {
+                tile,
+                frame,
+                times: 0,
+            };
+        }
+        refusal.times += 1;
+        refusal.times >= REFUSALS_BEFORE_FLOATING
+    }
+
+    /// Takes a tiled window out of the layout and floats it at `frame` (LAY-4).
+    fn float_at(&mut self, id: WindowId, frame: Rect) {
+        self.refusals.remove(&id);
+        let Some(window) = self.windows.get_mut(&id) else {
+            return;
+        };
+        window.floating = true;
+        window.floating_frame = Some(frame);
+        let n = window.workspace;
+        if let Some(ws) = self.workspaces.get_mut(&n) {
+            tree::remove(&mut ws.tree, id);
+            ws.floating.push(id);
+        }
+    }
+
     /// The focused window, if it is tiled, with its workspace.
     pub(super) fn focused_tiled(&self) -> Option<(WindowId, WorkspaceNumber)> {
         let id = self.focused_window?;
@@ -250,9 +302,16 @@ impl Wm {
         if window.kind == WindowKind::Popup || !self.is_visible(window.workspace) {
             return;
         }
-        // Recording what macOS reports makes reconcile resend the layout frame for tiled windows.
-        self.placements.insert(id, Placement::At(frame));
-        if !window.floating {
+        let floating = window.floating;
+        // Recording what macOS reports makes reconcile resend the layout frame for tiled
+        // windows, unless the window keeps refusing it (LAY-4).
+        let sent = self.placements.insert(id, Placement::At(frame));
+        if !floating {
+            if let Some(Placement::At(tile)) = sent
+                && self.refused_too_often(id, tile, frame)
+            {
+                self.float_at(id, frame);
+            }
             return;
         }
         let old_n = window.workspace;
@@ -437,6 +496,64 @@ mod tests {
                 frame: r(5., 5., 990., 790.)
             }]
         );
+    }
+
+    fn report(wm: &mut Wm, id: u64, frame: Rect) -> Vec<Command> {
+        wm.handle(Event::WindowFrameChanged {
+            id: w(id),
+            frame: ur(frame.x, frame.y, frame.width, frame.height),
+        })
+    }
+
+    #[test]
+    fn lay_4_a_window_that_keeps_refusing_its_tile_floats_where_it_is() {
+        let mut wm = one();
+        wm.handle(Event::WindowCreated(normal(1)));
+        let tile = Command::SetFrame {
+            id: w(1),
+            frame: r(5., 5., 990., 790.),
+        };
+        let refused = r(100., 100., 740., 384.);
+        assert_eq!(report(&mut wm, 1, refused), vec![tile.clone()]);
+        assert_eq!(report(&mut wm, 1, refused), vec![tile]);
+        assert_eq!(report(&mut wm, 1, refused), vec![]);
+        let window = wm.window(w(1)).unwrap();
+        assert!(window.floating);
+        assert_eq!(window.floating_frame, Some(refused));
+    }
+
+    #[test]
+    fn lay_4_dragging_a_tiled_window_around_isnt_refusing() {
+        let mut wm = one();
+        wm.handle(Event::WindowCreated(normal(1)));
+        for x in [50., 60., 70., 80.] {
+            assert_eq!(
+                report(&mut wm, 1, r(x, 50., 300., 300.)),
+                vec![Command::SetFrame {
+                    id: w(1),
+                    frame: r(5., 5., 990., 790.)
+                }]
+            );
+        }
+        assert!(!wm.window(w(1)).unwrap().floating);
+    }
+
+    #[test]
+    fn lay_4_a_new_tile_gets_its_own_three_tries() {
+        let mut wm = one();
+        wm.handle(Event::WindowCreated(normal(1)));
+        let refused = r(100., 100., 740., 384.);
+        report(&mut wm, 1, refused);
+        report(&mut wm, 1, refused);
+        wm.handle(Event::WindowCreated(normal(2)));
+        assert_eq!(
+            report(&mut wm, 1, refused),
+            vec![Command::SetFrame {
+                id: w(1),
+                frame: r(5., 5., 493., 790.)
+            }]
+        );
+        assert!(!wm.window(w(1)).unwrap().floating);
     }
 
     #[test]

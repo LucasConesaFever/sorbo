@@ -5,6 +5,12 @@ Notable design decisions: what was decided, why, and the alternatives rejected. 
 
 ## 2026-11-12: windows taller than their tile
 
+### D50. A tiled window that keeps refusing its tile floats (LAY-4) *(author)*
+**What:** core counts, per window, how many times in a row the app answers the same tile with the same other frame. On the third, the window leaves the layout and floats at the frame it reported; no more `SetFrame` is sent for that tile. A report that matches the tile, a different frame, or a new tile starts the count over. ⌃⌥V tiles it again, with three new tries.
+**Why:** found after the D48 install: a restart put every window on one workspace, Activity Monitor got a 475×258 tile, below its 740×384 minimum, and sorbo set its frame twice a second without end. The author chose floating over leaving it tiled at the wrong size.
+**Cost:** a window can float without being asked to; nothing in the log says so except that the `SetFrame`s stop. Three tries cost a second or so of flicker.
+**Rejected:** a per-app floating rule for Activity Monitor (*author*: fix sorbo instead); counting any report that differs from the tile (a tiled window dragged around three times would float); keeping it tiled at the size it chose (it overlaps its neighbours).
+
 ### D49. `./wm.sh stop` waits until launchd has let the old copy go (RUN-1)
 **What:** after `launchctl bootout`, `do_stop` checks every 0.1 s, for up to 10 s, until the service is no longer listed, and warns if it still is. `install` and `restart` start sorbo again only after that. `tests/service.sh` covers it with a fake `launchctl` that keeps the old copy listed for a moment.
 **Why:** found on the D48 install: `bootout` returned while the old copy was still listed with its pid, so the start that followed said "sorbo is already running" and did nothing; the old copy then exited and sorbo stayed off until `./wm.sh start`.
