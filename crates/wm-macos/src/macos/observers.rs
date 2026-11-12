@@ -434,6 +434,15 @@ fn moved(s: &mut Shared, id: WindowId, element: CFRetained<AXUIElement>) {
     arm_frame_timer(s, now);
 }
 
+/// Reads a window's frame again once it has settled after a `SetFrame`, and reports it if
+/// it isn't the one set. An app that ignores a frame often sends no notice at all; core
+/// needs to hear each refusal to stop asking (LAY-4, D50).
+pub(crate) fn check_frame_later(s: &mut Shared, id: WindowId) {
+    let now = Instant::now();
+    s.settle.poke(id, now);
+    arm_frame_timer(s, now);
+}
+
 fn arm_frame_timer(s: &Shared, now: Instant) {
     if let Some(timer) = &s.frame_timer {
         match s.settle.next_deadline() {

@@ -561,7 +561,10 @@ impl Platform for MacPlatform {
         // Reborrow as a plain `&mut Shared` so we can borrow two fields at once.
         let s = &mut *s;
         match command {
-            Command::SetFrame { id, frame } => windows::set_frame(&mut s.windows, id, frame),
+            Command::SetFrame { id, frame } => {
+                windows::set_frame(&mut s.windows, id, frame);
+                observers::check_frame_later(s, id);
+            }
             Command::Hide(id) => observers::hide_or_retry(s, id),
             Command::Focus(id) => focus::focus(s, id),
             Command::WarpPointer(p) => focus::warp(p),

@@ -8,6 +8,7 @@ Notable design decisions: what was decided, why, and the alternatives rejected. 
 ### D50. A tiled window that keeps refusing its tile floats (LAY-4) *(author)*
 **What:** core counts, per window, how many times in a row the app answers the same tile with the same other frame. On the third, the window leaves the layout and floats at the frame it reported; no more `SetFrame` is sent for that tile. A report that matches the tile, a different frame, or a new tile starts the count over. ⌃⌥V tiles it again, with three new tries.
 **Why:** found after the D48 install: a restart put every window on one workspace, Activity Monitor got a 475×258 tile, below its 740×384 minimum, and sorbo set its frame twice a second without end. The author chose floating over leaving it tiled at the wrong size.
+**Also:** `wm-macos` reads a window's frame again 300 ms after every `SetFrame` and reports it if it isn't the one set. Found on the first install: Activity Monitor, given a 475 px wide tile, stayed 740 wide after the second try and sent no more notices, so core heard only two refusals and never floated it.
 **Cost:** a window can float without being asked to; nothing in the log says so except that the `SetFrame`s stop. Three tries cost a second or so of flicker.
 **Rejected:** a per-app floating rule for Activity Monitor (*author*: fix sorbo instead); counting any report that differs from the tile (a tiled window dragged around three times would float); keeping it tiled at the size it chose (it overlaps its neighbours).
 
