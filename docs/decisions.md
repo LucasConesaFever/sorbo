@@ -5,6 +5,11 @@ Notable design decisions: what was decided, why, and the alternatives rejected. 
 
 ## 2026-11-12: windows taller than their tile
 
+### D49. `./wm.sh stop` waits until launchd has let the old copy go (RUN-1)
+**What:** after `launchctl bootout`, `do_stop` checks every 0.1 s, for up to 10 s, until the service is no longer listed, and warns if it still is. `install` and `restart` start sorbo again only after that. `tests/service.sh` covers it with a fake `launchctl` that keeps the old copy listed for a moment.
+**Why:** found on the D48 install: `bootout` returned while the old copy was still listed with its pid, so the start that followed said "sorbo is already running" and did nothing; the old copy then exited and sorbo stayed off until `./wm.sh start`.
+**Cost:** a stop can take up to 10 s longer when the WM is slow to put windows back.
+
 ### D48. `SetFrame` sizes the window before moving it (LAY-3)
 **What:** `SetFrame` now sets the size, then the position, then the size again. It used to set the position, then the size, then the position again.
 **Why:** found in daily use: a kitty window and Activity Monitor, shown in the bottom tile of the external monitor (953×518), stayed 586 tall and hung 68 px off the bottom. Both had been parked on the laptop display at 586. Moved first, the window kept its old height for a moment and reached past the monitor's bottom edge onto the laptop display; macOS then refused to shrink it, and sorbo's one correction after the app reported 586 didn't take either. Reproduced with Activity Monitor: the old order ends at 586, the new one at 518. The top tile was never affected, since the old size still fits there.

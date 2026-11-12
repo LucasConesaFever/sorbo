@@ -35,7 +35,7 @@ cargo fmt --all
 
 Before marking a task done, run `cargo fmt --all`, `cargo clippy` and `cargo test`, and report the results.
 
-CI (`.github/workflows/ci.yml`) runs the same checks plus `bash tests/certificate.sh` on macOS, and `cargo test -p wm-core` on Linux. The project is MIT-licensed (`LICENSE`); the crates are never published (`publish = false`). Rust 1.89 or later.
+CI (`.github/workflows/ci.yml`) runs the same checks plus `bash tests/certificate.sh` and `bash tests/service.sh` on macOS, and `cargo test -p wm-core` on Linux. The project is MIT-licensed (`LICENSE`); the crates are never published (`publish = false`). Rust 1.89 or later.
 
 ## Status
 

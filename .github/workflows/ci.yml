@@ -39,6 +39,8 @@ jobs:
         run: cargo test
       - name: wm.sh certificate tests
         run: bash tests/certificate.sh
+      - name: wm.sh service tests
+        run: bash tests/service.sh
 
   linux-core:
     runs-on: ubuntu-latest

@@ -29,6 +29,7 @@ cargo fmt --all
 cargo clippy --all-targets -- -D warnings
 cargo test
 bash tests/certificate.sh  # when wm.sh changes
+bash tests/service.sh      # when wm.sh changes
 ```
 
 CI runs the same checks, plus `cargo test -p wm-core` on Linux.

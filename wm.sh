@@ -45,8 +45,18 @@ is_running() {
 
 do_stop() {
     if is_loaded; then
-        # bootout sends SIGTERM and waits: the WM puts hidden windows back and exits 0.
+        # bootout sends SIGTERM: the WM puts hidden windows back and exits 0. It can return
+        # while the old copy is still listed, and a start then would think it's running
+        # (D49), so wait up to 10 s for launchd to let it go.
         launchctl bootout "$DOMAIN/$LABEL"
+        local i
+        for i in $(seq 100); do
+            is_loaded || break
+            sleep 0.1
+        done
+        if is_loaded; then
+            echo "warning: sorbo is still shutting down; if it doesn't come back, run ./wm.sh start" >&2
+        fi
         echo "sorbo stopped"
     else
         echo "sorbo is not running"
@@ -315,7 +325,7 @@ To remove the rest by hand:
 EOF
 }
 
-# Sourced (tests/certificate.sh): define the functions, run nothing.
+# Sourced (tests/certificate.sh, tests/service.sh): define the functions, run nothing.
 [[ "${BASH_SOURCE[0]}" == "$0" ]] || return 0
 
 case "${1:-}" in
