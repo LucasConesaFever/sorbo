@@ -14,8 +14,8 @@ use objc2_core_foundation::CFRunLoopTimer;
 
 use super::{Shared, arm, ax, observers, run_or_retry};
 use crate::focus_guard::{
-    Activation, ActivationOutcome, FocusReport, HOLD_FOCUS_FOR, HeldActivation, MAX_REASSERTS,
-    PendingFocus, QUIT_WAIT, after_report, decide,
+    Activation, ActivationOutcome, AfterClose, FocusReport, HOLD_FOCUS_FOR, HeldActivation,
+    MAX_REASSERTS, PendingFocus, QUIT_WAIT, after_close, after_report, decide,
 };
 use crate::wm_log;
 
@@ -41,6 +41,7 @@ pub(crate) fn focus(s: &mut Shared, id: WindowId) {
     if raised != AXError::Success {
         wm_log!("Focus {id:?}: AXRaise failed: {raised:?}");
     }
+    s.last_focus = Some(id);
     // The app may still pick another of its own windows while it activates (focus_guard).
     s.pending_focus = Some(PendingFocus {
         id,
@@ -193,10 +194,30 @@ pub(crate) fn report_focus(s: &mut Shared, pid: i32) {
             id = new_id;
         }
         let hidden = s.windows.get(id).is_some_and(|w| w.hidden);
+        let successor = s
+            .last_focus
+            .filter(|f| s.windows.get(*f).is_some_and(|w| !w.hidden));
+        match after_close(s.close_until, id, hidden, successor, Instant::now()) {
+            AfterClose::Report => {}
+            AfterClose::Refocus(shown) => {
+                wm_log!(
+                    "{id:?} on a hidden workspace took focus after a close; focusing {shown:?} again (FOC-11)"
+                );
+                focus(s, shown);
+                return;
+            }
+            AfterClose::Ignore => {
+                wm_log!(
+                    "{id:?} on a hidden workspace took focus after a close; staying on this workspace (FOC-11)"
+                );
+                return;
+            }
+        }
         match decide(s.pending_focus, pid, Some(id), hidden, Instant::now()) {
             FocusReport::Reassert => reassert(s),
             FocusReport::Report => {
                 s.pending_focus = after_report(s.pending_focus, pid, Some(id));
+                s.last_focus = Some(id);
                 s.push(Event::WindowFocused(id));
             }
         }

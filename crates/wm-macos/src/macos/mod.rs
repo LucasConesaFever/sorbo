@@ -146,6 +146,10 @@ pub(crate) struct Shared {
     pub quit: bool,
     /// The last `Focus` we sent, until its app confirms it (`focus_guard`).
     pub pending_focus: Option<crate::focus_guard::PendingFocus>,
+    /// The window core was last told has focus, or asked to focus (FOC-11).
+    pub last_focus: Option<WindowId>,
+    /// Until when a window on a hidden workspace can't take focus, after a close (FOC-11).
+    pub close_until: Option<Instant>,
     /// An activation waiting to see whether the previous app quits (FOC-8).
     pub held_activation: Option<crate::focus_guard::HeldActivation>,
     pub activation_timer: Option<CFRetained<CFRunLoopTimer>>,
@@ -428,6 +432,8 @@ impl MacPlatform {
             quit: false,
             wake_posted: false,
             pending_focus: None,
+            last_focus: None,
+            close_until: None,
             held_activation: None,
             activation_timer: None,
             active_pid: objc2_app_kit::NSWorkspace::sharedWorkspace()

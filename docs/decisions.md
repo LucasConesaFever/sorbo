@@ -5,6 +5,12 @@ Notable design decisions: what was decided, why, and the alternatives rejected. 
 
 ## 2026-11-12: windows taller than their tile
 
+### D51. After a close, a window on a hidden workspace can't take focus for a second (FOC-11) *(author)*
+**What:** when a shown window closes, `wm-macos` refuses for 1 s any focus report of a window parked on a hidden workspace. If a window on screen had focus after the close, it's focused again; otherwise the report is dropped and core stays on the emptied workspace.
+**Why:** found in daily use: closing a kitty window on workspace 3 switched to workspace 6. macOS focused kitty's other window on screen, then kitty, 270 ms later, focused its most recently used window, which was on workspace 6, and FOC-7 followed it. D46's guard didn't apply: sorbo had sent no `Focus`. The author wants focus kept on the workspace of the closed window, empty or not.
+**Cost:** on an emptied workspace the hidden window still has the keyboard: what you type before clicking goes to it. A deliberate switch to a hidden window (Cmd+` ) within a second of closing a window is ignored.
+**Rejected:** limiting it to the closed window's app (another app activated after the last window closes can do the same); activating sorbo to take the keyboard away from the hidden window (a bigger change; first see whether it matters in use).
+
 ### D50. A tiled window that keeps refusing its tile floats (LAY-4) *(author)*
 **What:** core counts, per window, how many times in a row the app answers the same tile with the same other frame. On the third, the window leaves the layout and floats at the frame it reported; no more `SetFrame` is sent for that tile. A report that matches the tile, a different frame, or a new tile starts the count over. ⌃⌥V tiles it again, with three new tries.
 **Why:** found after the D48 install: a restart put every window on one workspace, Activity Monitor got a 475×258 tile, below its 740×384 minimum, and sorbo set its frame twice a second without end. The author chose floating over leaving it tiled at the wrong size.

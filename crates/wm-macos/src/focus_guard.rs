@@ -8,6 +8,10 @@
 //! The app confirming our window doesn't end that: kitty confirmed it and then, 25 ms later,
 //! focused its window on a hidden workspace, which made FOC-7 switch workspaces (D46). After
 //! the confirmation only a hidden window is overridden: the user can't have clicked one.
+//!
+//! Closing a window does the same without any `Focus` from us: kitty focused another of its
+//! windows on screen, then its window on a hidden workspace. For a second after a close, a
+//! hidden window isn't believed (FOC-11, D51).
 
 use std::time::{Duration, Instant};
 
@@ -59,6 +63,41 @@ pub fn decide(
             FocusReport::Reassert
         }
         _ => FocusReport::Report,
+    }
+}
+
+/// How long after a window closes focus on a hidden window is refused (FOC-11). kitty
+/// moved focus to its window on a hidden workspace 270 ms after one of its windows closed.
+pub const HOLD_AFTER_CLOSE: Duration = Duration::from_secs(1);
+
+/// What to do with a focus report shortly after a window closed (FOC-11).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AfterClose {
+    /// Pass it on to core.
+    Report,
+    /// An app picked its window on a hidden workspace: focus this shown window instead.
+    Refocus(WindowId),
+    /// An app picked its window on a hidden workspace and nothing on screen took over:
+    /// keep focus on the workspace the closed window was on.
+    Ignore,
+}
+
+/// Decides what to do when `focused` is reported at `now`, a window having closed before
+/// `close_until`. `focused_hidden` says whether it's parked on a hidden workspace;
+/// `successor` is the shown window that had focus after the close, if any.
+pub fn after_close(
+    close_until: Option<Instant>,
+    focused: WindowId,
+    focused_hidden: bool,
+    successor: Option<WindowId>,
+    now: Instant,
+) -> AfterClose {
+    if !focused_hidden || close_until.is_none_or(|until| now >= until) {
+        return AfterClose::Report;
+    }
+    match successor.filter(|s| *s != focused) {
+        Some(s) => AfterClose::Refocus(s),
+        None => AfterClose::Ignore,
     }
 }
 
@@ -279,5 +318,50 @@ mod tests {
         let now = Instant::now();
         let p = Some(pending(now));
         assert_eq!(after_report(p, 77, Some(WindowId(9))), p);
+    }
+
+    #[test]
+    fn foc_11_after_a_close_the_app_cant_pull_focus_to_a_hidden_workspace() {
+        let now = Instant::now();
+        let until = Some(now + HOLD_AFTER_CLOSE);
+        let later = now + Duration::from_millis(270);
+        assert_eq!(
+            after_close(until, WindowId(4), true, Some(WindowId(6)), later),
+            AfterClose::Refocus(WindowId(6))
+        );
+    }
+
+    #[test]
+    fn foc_11_an_emptied_workspace_keeps_focus() {
+        let now = Instant::now();
+        let until = Some(now + HOLD_AFTER_CLOSE);
+        assert_eq!(
+            after_close(until, WindowId(4), true, None, now),
+            AfterClose::Ignore
+        );
+    }
+
+    #[test]
+    fn foc_11_a_shown_window_is_believed() {
+        let now = Instant::now();
+        let until = Some(now + HOLD_AFTER_CLOSE);
+        assert_eq!(
+            after_close(until, WindowId(6), false, Some(WindowId(5)), now),
+            AfterClose::Report
+        );
+    }
+
+    #[test]
+    fn foc_11_later_a_hidden_window_switches_workspace_again() {
+        let now = Instant::now();
+        let until = Some(now + HOLD_AFTER_CLOSE);
+        assert_eq!(
+            after_close(until, WindowId(4), true, None, now + HOLD_AFTER_CLOSE),
+            AfterClose::Report
+        );
+        assert_eq!(
+            after_close(None, WindowId(4), true, None, now),
+            AfterClose::Report
+        );
     }
 }

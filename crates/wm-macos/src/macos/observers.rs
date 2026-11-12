@@ -16,6 +16,7 @@ use super::{Shared, arm, ax, disarm, run_or_defer, run_or_retry};
 use crate::classify::{classify, reclassify_after, reports_focus_change};
 use crate::confirm::{confirmed_frame, next_recheck};
 use crate::echo::is_echo;
+use crate::focus_guard::HOLD_AFTER_CLOSE;
 use crate::hide::hide_retry_after;
 use crate::lost::{Intent, LostWindow, is_display_loss, last_place};
 use crate::wm_log;
@@ -348,9 +349,16 @@ fn lost_due(s: &mut Shared) {
     arm_lost_timer(s, now);
 }
 
-/// Forgets a window and tells core it's gone.
+/// Forgets a window and tells core it's gone. A shown window closing holds focus on screen
+/// for a moment (FOC-11).
 pub(crate) fn untrack(s: &mut Shared, id: WindowId) {
-    if s.windows.remove(id).is_some() {
+    if let Some(w) = s.windows.remove(id) {
+        if !w.hidden && w.kind != WindowKind::Popup {
+            s.close_until = Some(Instant::now() + HOLD_AFTER_CLOSE);
+        }
+        if s.last_focus == Some(id) {
+            s.last_focus = None;
+        }
         s.reclassify.retain(|(r, _, _)| *r != id);
         s.hide_retry.retain(|(r, _, _)| *r != id);
         s.settle.remove(id);
