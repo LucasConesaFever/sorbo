@@ -19,6 +19,7 @@ pub mod limits;
 pub mod logging;
 pub mod lost;
 pub mod monitors;
+pub mod place;
 
 #[cfg(target_os = "macos")]
 mod macos;

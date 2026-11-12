@@ -12,6 +12,7 @@ use super::displays::Display;
 use crate::classify::WindowFacts;
 use crate::hide::{hide_position, parking_size, restore_frame};
 use crate::lost::Intent;
+use crate::place::{FrameStep, SET_FRAME_STEPS};
 use crate::wm_log;
 
 /// What `wm-macos` remembers about a window it has reported to core.
@@ -199,10 +200,16 @@ pub(crate) fn set_frame(table: &mut WindowTable, id: WindowId, frame: Rect) {
         return;
     };
     w.intent = Some(Intent::At(frame));
-    ax::set_position(&w.element, frame.x, frame.y);
-    ax::set_size(&w.element, frame.width, frame.height);
-    let err = ax::set_position(&w.element, frame.x, frame.y);
-    if err.0 != 0 {
+    let mut moved = None;
+    for step in SET_FRAME_STEPS {
+        match step {
+            FrameStep::Size => {
+                ax::set_size(&w.element, frame.width, frame.height);
+            }
+            FrameStep::Position => moved = Some(ax::set_position(&w.element, frame.x, frame.y)),
+        }
+    }
+    if let Some(err) = moved.filter(|err| err.0 != 0) {
         wm_log!("SetFrame {id:?} failed: {err:?}");
     }
     w.last_set = Some(frame);

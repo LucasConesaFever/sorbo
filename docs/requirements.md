@@ -85,6 +85,7 @@ Neither happens with Hyprland on Linux. The goal is to get Hyprland-like behavio
 
 - **LAY-1.** Default layout is Hyprland's dwindle: each new window splits the focused window in two along its longer side, forming a binary tree.
 - **LAY-2.** Closing a window gives its space back to its sibling in the tree.
+- **LAY-3.** A window shown in a tile gets the tile's size, even when it comes from another display *(added 2026-11-12, D48)*.
 
 ### Keybindings (v1, hardcoded)
 

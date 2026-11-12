@@ -3,7 +3,14 @@
 Notable design decisions: what was decided, why, and the alternatives rejected. Newest first.
 "(author)" means the author decided. Everything else is the designer's call, made on the author's instruction to make calls and explain them.
 
-## 2026-11-10: screen wake, mi-wm leftovers
+## 2026-11-12: windows taller than their tile
+
+### D48. `SetFrame` sizes the window before moving it (LAY-3)
+**What:** `SetFrame` now sets the size, then the position, then the size again. It used to set the position, then the size, then the position again.
+**Why:** found in daily use: a kitty window and Activity Monitor, shown in the bottom tile of the external monitor (953×518), stayed 586 tall and hung 68 px off the bottom. Both had been parked on the laptop display at 586. Moved first, the window kept its old height for a moment and reached past the monitor's bottom edge onto the laptop display; macOS then refused to shrink it, and sorbo's one correction after the app reported 586 didn't take either. Reproduced with Activity Monitor: the old order ends at 586, the new one at 518. The top tile was never affected, since the old size still fits there.
+**Cost:** one more Accessibility call per `SetFrame` than a plain size-then-position. A window that grows itself after being placed is still corrected only once.
+**Rejected:** checking the frame again after a correction and retrying (treats the symptom; the window was never going to accept the size where it stood).
+
 
 ### D47. Entering a monitor with an empty workspace focuses it (FOC-10)
 **What:** core remembers the monitor the pointer was last inside (by the monitors' usable frames). When a `PointerMoved` lands inside a different monitor whose visible workspace has no windows, that monitor becomes the focused one and focus is cleared, as KEY-4 already does for an empty monitor. No command is sent: macOS keeps the previous app active, as after FOC-8.
