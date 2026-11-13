@@ -58,7 +58,7 @@ Neither happens with Hyprland on Linux. The goal is to get Hyprland-like behavio
 - **MON-4.** Workspaces remember their assigned monitor. When that monitor reconnects, its workspaces return to it.
 - **MON-5.** Exception to MON-4: a workspace that is visible on another monitor at the moment of reconnection stays where it is.
 - **MON-6.** A monitor that disappears and comes back within 2 seconds (macOS does this when the screen wakes or unlocks) changes nothing: its workspaces stay where they are *(author, added 2026-11-08)*.
-- **MON-7.** Windows that macOS rebuilds during a display change (they vanish and the same app shows them again) keep their workspace and place instead of arriving as new windows *(author, added 2026-11-08)*.
+- **MON-7.** Windows that macOS rebuilds during a display change (they vanish and the same app shows them again) keep their workspace and place instead of arriving as new windows, also when the Mac sleeps with them lost and the screens wake hours later *(author, added 2026-11-08; sleep 2026-11-13, D52)*.
 
 ### Focus
 
@@ -87,7 +87,7 @@ Neither happens with Hyprland on Linux. The goal is to get Hyprland-like behavio
 - **LAY-1.** Default layout is Hyprland's dwindle: each new window splits the focused window in two along its longer side, forming a binary tree.
 - **LAY-2.** Closing a window gives its space back to its sibling in the tree.
 - **LAY-3.** A window shown in a tile gets the tile's size, even when it comes from another display *(added 2026-11-12, D48)*.
-- **LAY-4.** A tiled window that answers its tile with the same other frame three times in a row (an app with a minimum size larger than the tile) floats where it is instead of being resized again. A window dragged around doesn't count *(author, added 2026-11-12, D50)*.
+- **LAY-4.** A tiled window that answers its tile with the same other frame three times in a row (an app with a minimum size larger than the tile) floats where it is instead of being resized again. A window dragged around doesn't count, and neither does a window macOS moves during a display change *(author, added 2026-11-12, D50; display changes 2026-11-13, D53)*.
 
 ### Keybindings (v1, hardcoded)
 

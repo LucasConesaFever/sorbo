@@ -15,7 +15,7 @@ use super::windows::facts;
 use super::{Shared, arm, ax, disarm, run_or_defer, run_or_retry};
 use crate::classify::{classify, reclassify_after, reports_focus_change};
 use crate::confirm::{confirmed_frame, next_recheck};
-use crate::echo::is_echo;
+use crate::echo::{displays_settling, is_echo};
 use crate::focus_guard::HOLD_AFTER_CLOSE;
 use crate::hide::hide_retry_after;
 use crate::lost::{Intent, LostWindow, is_display_loss, last_place};
@@ -266,7 +266,7 @@ fn reconfirm_due(s: &mut Shared) {
             continue;
         };
         if let Some(frame) = confirmed_or_queued(s, id, pid, frame, attempts_done + 1) {
-            s.push(Event::WindowFrameChanged { id, frame });
+            report_frame(s, id, frame);
         }
     }
     arm_reconfirm_timer(s, now);
@@ -302,6 +302,7 @@ pub(crate) fn lose_or_untrack(s: &mut Shared, id: WindowId) {
     s.reclassify.retain(|(r, _, _)| *r != id);
     s.hide_retry.retain(|(r, _, _)| *r != id);
     s.settle.remove(id);
+    s.held_frames.forget(id);
     wm_log!("{id:?} vanished during a display change; waiting for it to come back (MON-7)");
     s.lost.remember(LostWindow {
         id,
@@ -332,6 +333,10 @@ pub(crate) unsafe extern "C-unwind" fn on_lost_timer(
 
 fn lost_due(s: &mut Shared) {
     let now = Instant::now();
+    // With the screens off no app shows its windows: wait for the wake (D52).
+    if s.screens_asleep {
+        return;
+    }
     // Most apps don't announce a rebuilt window until they're activated: go and look.
     for pid in s.lost.due_rescans(now) {
         for info in track_app_windows(s, pid) {
@@ -349,6 +354,30 @@ fn lost_due(s: &mut Shared) {
     arm_lost_timer(s, now);
 }
 
+/// The screens went to sleep: lost windows stop counting down (MON-7, D52).
+pub(crate) fn screens_slept(s: &mut Shared) {
+    s.screens_asleep = true;
+}
+
+/// The screens woke: lost windows get their whole wait again, starting now (MON-7, D52).
+pub(crate) fn screens_woke(s: &mut Shared) {
+    let now = Instant::now();
+    s.screens_asleep = false;
+    s.lost.restart(now);
+    arm_lost_timer(s, now);
+}
+
+/// Tells core a window's frame changed, unless a display change is still settling: macOS
+/// moves windows around then, and they'd look like they refuse their tiles. Those are
+/// checked once core has the new monitors (LAY-4, D53).
+fn report_frame(s: &mut Shared, id: WindowId, frame: UsableRect) {
+    if displays_settling(&s.debounce, &s.removal_grace) {
+        s.held_frames.hold(id);
+    } else {
+        s.push(Event::WindowFrameChanged { id, frame });
+    }
+}
+
 /// Forgets a window and tells core it's gone. A shown window closing holds focus on screen
 /// for a moment (FOC-11).
 pub(crate) fn untrack(s: &mut Shared, id: WindowId) {
@@ -362,6 +391,7 @@ pub(crate) fn untrack(s: &mut Shared, id: WindowId) {
         s.reclassify.retain(|(r, _, _)| *r != id);
         s.hide_retry.retain(|(r, _, _)| *r != id);
         s.settle.remove(id);
+        s.held_frames.forget(id);
         s.push(Event::WindowDestroyed(id));
     }
 }
@@ -487,7 +517,7 @@ fn frames_settled(s: &mut Shared) {
         if !is_echo(last_set, frame) {
             let pid = w.pid;
             if let Some(frame) = confirmed_or_queued(s, id, pid, frame, 0) {
-                s.push(Event::WindowFrameChanged { id, frame });
+                report_frame(s, id, frame);
             }
         }
     }

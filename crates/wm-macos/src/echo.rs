@@ -154,6 +154,37 @@ impl RemovalGrace {
     }
 }
 
+/// True while a display change hasn't reached core yet: the burst is still settling, or a
+/// missing monitor is being waited for (MON-6). Windows macOS moves meanwhile aren't
+/// refusing their tiles (LAY-4, D53).
+pub fn displays_settling(debounce: &Debounce, grace: &RemovalGrace) -> bool {
+    debounce.deadline().is_some() || grace.deadline().is_some()
+}
+
+/// Windows whose frame changed while the displays settled, to check once core knows the new
+/// monitors (D53).
+#[derive(Debug, Default)]
+pub struct HeldFrames {
+    ids: Vec<WindowId>,
+}
+
+impl HeldFrames {
+    pub fn hold(&mut self, id: WindowId) {
+        if !self.ids.contains(&id) {
+            self.ids.push(id);
+        }
+    }
+
+    /// The window is gone: nothing to check.
+    pub fn forget(&mut self, id: WindowId) {
+        self.ids.retain(|held| *held != id);
+    }
+
+    pub fn take(&mut self) -> Vec<WindowId> {
+        std::mem::take(&mut self.ids)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -266,5 +297,31 @@ mod tests {
         d.poke(t0 + Duration::from_millis(200));
         assert!(!d.take_due(t0 + Duration::from_millis(450)));
         assert!(d.take_due(t0 + Duration::from_millis(500)));
+    }
+
+    #[test]
+    fn lay_4_frames_wait_while_the_displays_settle() {
+        let t0 = Instant::now();
+        let mut debounce = Debounce::new();
+        let mut grace = RemovalGrace::new();
+        assert!(!displays_settling(&debounce, &grace));
+        debounce.poke(t0);
+        assert!(displays_settling(&debounce, &grace));
+        assert!(debounce.take_due(t0 + DISPLAY_SETTLE));
+        assert!(!displays_settling(&debounce, &grace));
+        // A monitor is missing: MON-6 waits, and so do the frames.
+        grace.decide(true, t0 + DISPLAY_SETTLE);
+        assert!(displays_settling(&debounce, &grace));
+    }
+
+    #[test]
+    fn lay_4_held_frames_are_checked_once_each() {
+        let mut held = HeldFrames::default();
+        held.hold(WindowId(7));
+        held.hold(WindowId(5));
+        held.hold(WindowId(7));
+        held.forget(WindowId(5));
+        assert_eq!(held.take(), vec![WindowId(7)]);
+        assert!(held.take().is_empty());
     }
 }

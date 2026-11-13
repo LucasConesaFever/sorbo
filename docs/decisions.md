@@ -3,6 +3,20 @@
 Notable design decisions: what was decided, why, and the alternatives rejected. Newest first.
 "(author)" means the author decided. Everything else is the designer's call, made on the author's instruction to make calls and explain them.
 
+## 2026-11-13: closing the lid
+
+### D53. Frame reports wait while a display change settles (LAY-4)
+**What:** while a display change hasn't reached core yet (the 300 ms burst wait, or MON-6's 2 s wait for a missing monitor), `wm-macos` holds back window frame reports. Once core has the new monitors, it reads each held window's frame again (300 ms later, as after a `SetFrame`) and reports it if it isn't the one set.
+**Why:** found after closing the lid: as the monitor above the laptop went, macOS moved every window onto the screens left, before sorbo knew the monitors had changed. sorbo sent them back to tiles on the monitor that was going, macOS moved them again, and on the third round D50 floated Slack and a kitty window as if they refused their tiles.
+**Cost:** a window dragged during those 2 seconds is placed only after them.
+**Rejected:** counting more refusals before floating (it only delays the false float); telling core to ignore refusals for a while after a display change (core never hears about the change until it settles, and the fighting would go on).
+
+### D52. Lost windows wait while the screens sleep (MON-7)
+**What:** a window lost during a display change (D30, D44) waits for its app to show it again only while the screens are on. When the screens wake (`NSWorkspaceScreensDidWakeNotification`), every lost window gets the full minute again, and its app is looked at again on the same schedule.
+**Why:** found after closing the lid: Brave's window, on workspace 2, vanished as the screens went off. The Mac slept, but woke in the background three times with the screens off, and those wakes used up the minute (`Instant` only counts time awake). sorbo gave up on the window at 17:37; the next morning Brave showed it again, and it arrived as a new window on the focused workspace, 1.
+**Cost:** a window that really closed while the screens went off still holds its workspace until a minute after they wake.
+**Rejected:** keeping lost windows until their app quits (a window closed during a display change would hold its workspace forever); counting wall-clock time instead (the night's sleep would use it up too).
+
 ## 2026-11-12: windows taller than their tile
 
 ### D51. After a close, a window on a hidden workspace can't take focus for a second (FOC-11) *(author)*

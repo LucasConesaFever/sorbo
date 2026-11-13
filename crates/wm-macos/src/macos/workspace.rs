@@ -1,4 +1,5 @@
-//! App-level notifications from `NSWorkspace`: launch, quit, hide, unhide (spec 5.7).
+//! App-level notifications from `NSWorkspace`: launch, quit, hide, unhide (spec 5.7), and
+//! the screens sleeping and waking (MON-7, D52).
 //!
 //! `NSNotificationCenter` calls an Objective-C method on an object, so we define a tiny
 //! Objective-C class with `objc2::define_class!`. (The block-based API would need the
@@ -14,7 +15,8 @@ use objc2_app_kit::{
     NSApplicationActivationPolicy, NSRunningApplication, NSWorkspace, NSWorkspaceApplicationKey,
     NSWorkspaceDidActivateApplicationNotification, NSWorkspaceDidHideApplicationNotification,
     NSWorkspaceDidLaunchApplicationNotification, NSWorkspaceDidTerminateApplicationNotification,
-    NSWorkspaceDidUnhideApplicationNotification,
+    NSWorkspaceDidUnhideApplicationNotification, NSWorkspaceScreensDidSleepNotification,
+    NSWorkspaceScreensDidWakeNotification,
 };
 use objc2_foundation::{NSNotification, NSNotificationName, NSObject};
 use wm_core::Event;
@@ -73,6 +75,16 @@ define_class!(
                 }
             });
         }
+
+        #[unsafe(method(screensSlept:))]
+        fn screens_slept(&self, _notification: &NSNotification) {
+            self.run("screens slept", observers::screens_slept);
+        }
+
+        #[unsafe(method(screensWoke:))]
+        fn screens_woke(&self, _notification: &NSNotification) {
+            self.run("screens woke", observers::screens_woke);
+        }
     }
 );
 
@@ -111,7 +123,7 @@ pub(crate) fn install(shared: &'static RefCell<Shared>) -> Retained<WorkspaceObs
 
     let center = NSWorkspace::sharedWorkspace().notificationCenter();
     // SAFETY: reading extern statics provided by AppKit.
-    let subscriptions: [(&NSNotificationName, objc2::runtime::Sel); 5] = unsafe {
+    let subscriptions: [(&NSNotificationName, objc2::runtime::Sel); 7] = unsafe {
         [
             (
                 NSWorkspaceDidActivateApplicationNotification,
@@ -130,6 +142,8 @@ pub(crate) fn install(shared: &'static RefCell<Shared>) -> Retained<WorkspaceObs
                 NSWorkspaceDidUnhideApplicationNotification,
                 sel!(appUnhidden:),
             ),
+            (NSWorkspaceScreensDidSleepNotification, sel!(screensSlept:)),
+            (NSWorkspaceScreensDidWakeNotification, sel!(screensWoke:)),
         ]
     };
     for (name, selector) in subscriptions {

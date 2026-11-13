@@ -172,6 +172,10 @@ fn settle(s: &mut Shared) {
     // Reborrow as a plain `&mut Shared` to use two fields at once.
     let s = &mut *s;
     super::windows::repark_hidden(&mut s.windows, &s.displays);
+    // Windows macOS moved while the displays settled: look at them now (D53).
+    for id in s.held_frames.take() {
+        super::observers::check_frame_later(s, id);
+    }
     // The main display may have moved or changed size: put the banner back across its top.
     super::banner::refresh(s);
 }

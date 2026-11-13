@@ -109,6 +109,16 @@ impl LostWindows {
         Some(self.windows.remove(index))
     }
 
+    /// The screens woke at `now`: every lost window waits a full `KEEP_LOST_FOR` again, with
+    /// its looks at the app starting over. Background wakes with the screens off use up the
+    /// wait while no app can show its windows (D52).
+    pub fn restart(&mut self, now: Instant) {
+        for w in &mut self.windows {
+            w.lost_at = now;
+            w.rescans_done = 0;
+        }
+    }
+
     /// Removes and returns the windows nobody claimed in time: they really are gone.
     pub fn take_expired(&mut self, now: Instant) -> Vec<WindowId> {
         self.take_where(|w| now >= w.lost_at + KEEP_LOST_FOR)
@@ -348,5 +358,19 @@ mod tests {
         let half = Rect::new(3966.0, 303.0, 953.0, 1040.0);
         let claimed = list.claim(10, WindowKind::Normal, half, now);
         assert_eq!(claimed.map(|w| w.id), Some(WindowId(6)));
+    }
+
+    #[test]
+    fn mon_7_a_lost_window_waits_again_once_the_screens_wake() {
+        let now = Instant::now();
+        let mut list = LostWindows::default();
+        list.remember(lost(1, 10, 2061.0, now));
+        // The Mac slept with the screens off; background wakes used up most of the wait.
+        let wake = now + Duration::from_secs(59);
+        list.restart(wake);
+        assert!(list.take_expired(now + Duration::from_secs(100)).is_empty());
+        assert_eq!(list.next_expiry(), Some(wake + KEEP_LOST_FOR));
+        assert_eq!(list.due_rescans(wake + RESCAN_AFTER[0]), vec![10]);
+        assert_eq!(list.take_expired(wake + KEEP_LOST_FOR), vec![WindowId(1)]);
     }
 }

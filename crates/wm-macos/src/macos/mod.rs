@@ -81,6 +81,10 @@ pub(crate) struct Shared {
     /// Windows that vanished during a display change, waiting to come back (MON-7).
     pub lost: crate::lost::LostWindows,
     pub lost_timer: Option<CFRetained<CFRunLoopTimer>>,
+    /// True between the screens going to sleep and waking: lost windows wait (MON-7, D52).
+    pub screens_asleep: bool,
+    /// Frame reports held back while a display change settles (LAY-4, D53).
+    pub held_frames: crate::echo::HeldFrames,
     pub windows: WindowTable,
     /// One Accessibility observer per observed app (spec 5.7).
     pub observers: HashMap<i32, CFRetained<AXObserver>>,
@@ -392,6 +396,8 @@ impl MacPlatform {
             last_display_change: None,
             lost: crate::lost::LostWindows::default(),
             lost_timer: None,
+            screens_asleep: false,
+            held_frames: crate::echo::HeldFrames::default(),
             windows: WindowTable::new(),
             observers: HashMap::new(),
             fullscreen: Vec::new(),
